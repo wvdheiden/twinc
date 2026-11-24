@@ -5,7 +5,9 @@ Een two-panel filemanager voor de Mac-terminal in de stijl van de klassieke DOS-
 ## Installeren
 
 ```sh
-brew install wvdheiden/tap/ncmac          # via Homebrew
+brew tap wvdheiden/tap
+brew trust wvdheiden/tap                  # Homebrew 7+: deze tap toestaan
+brew install ncmac
 ```
 
 Of download de ondertekende `ncmac-<versie>.pkg` van de GitHub-releases, of bouw zelf:

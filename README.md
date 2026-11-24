@@ -7,7 +7,9 @@ A fast two-panel file manager for the macOS terminal, in the style of the classi
 **Homebrew**
 
 ```sh
-brew install wvdheiden/tap/ncmac
+brew tap wvdheiden/tap
+brew trust wvdheiden/tap        # Homebrew 7+: allow this third-party tap
+brew install ncmac
 ```
 
 **Installer package:** download the signed and notarized `ncmac-<version>.pkg` from [Releases](https://github.com/wvdheiden/ncmac/releases). It installs to `/usr/local/bin`.
