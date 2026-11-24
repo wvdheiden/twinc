@@ -2,6 +2,8 @@
 
 A fast two-panel file manager for the macOS terminal, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. (Nederlands: [README.nl.md](README.nl.md))
 
+![ncmac: marking files, copying, browsing a zip, the pull-down menu and the viewer](docs/demo.gif)
+
 ## Install
 
 **Homebrew**

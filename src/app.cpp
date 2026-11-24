@@ -526,7 +526,7 @@ struct App {
       def = names[0];
       what = "\"" + names[0] + "\"";
     } else {
-      def = op().path;
+      def = displayPath(op().path);
       if (names.size() == 1 && op().path == p.path) def = names[0];
     }
     std::string dest = def;

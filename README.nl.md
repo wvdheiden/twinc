@@ -2,6 +2,8 @@
 
 Een two-panel filemanager voor de Mac-terminal in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
 
+![ncmac in actie](docs/demo.gif)
+
 ## Installeren
 
 ```sh
