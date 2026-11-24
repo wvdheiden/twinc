@@ -1,0 +1,4 @@
+build/
+ncmac
+dist/
+.DS_Store
