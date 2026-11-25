@@ -61,6 +61,7 @@ source /usr/local/share/ncmac/ncm.zsh               # .pkg
 | Ctrl-E / Ctrl-X | previous / next command |
 | Ctrl-J / Alt-Enter | put file name / full path on the command line |
 | Shift-F9 | save setup |
+| Alt-. | show/hide hidden files (dotfiles and Finder-hidden), also F9 → Options |
 
 **Enter** opens what is under the cursor:
 * a directory or an archive is shown in the panel;

@@ -1033,7 +1033,7 @@ struct App {
               "  Shift-F4 edit new file    Shift-F6 rename in place",
               "  Alt-F7 find file    Alt-F8 history    Alt-F9 25/43/50 lines",
               "  Alt-F10 directory tree (Right/+ open, Left/- close, type to search)",
-              "  Shift-F9 save setup",
+              "  Shift-F9 save setup    Alt-. show/hide hidden files (also F9 Options)",
               "  Without F-keys (iPad): Ctrl-F then 1..9,0 = F1..F10",
               "    Ctrl-F s 4 = Shift-F4, Ctrl-F a 7 = Alt-F7, Ctrl-F c 3 = Ctrl-F3",
               "  Also: Esc 1 .. Esc 0 (quickly), or tap the key bar",
@@ -1183,7 +1183,7 @@ struct App {
         {"-", "", 0, nullptr},
         {"Edit user menu", "", A_EDITMENU, nullptr}}, 0};
     Menu opts{"Options", {
-        {"Show hidden files", "", A_OPT_HIDDEN, [] { return cfg.showHidden; }},
+        {"Show hidden files", "Alt-.", A_OPT_HIDDEN, [] { return cfg.showHidden; }},
         {"Pause after command", "", A_OPT_PAUSE, [] { return cfg.pause; }},
         {"Mouse", "", A_OPT_MOUSE, [] { return cfg.mouse; }},
         {"Clock", "", A_OPT_CLOCK, [] { return cfg.clock; }},
@@ -1479,6 +1479,12 @@ struct App {
     Panel& p = cp();
     int base = keyBase(k), mods = k & KM_MASK;
 
+    // Alt-. (Option-. gives "≥" without Meta): show/hide hidden files
+    if (k == ('.' | KM_ALT) || (cmdEmpty && k == 0x2265)) {
+      cfg.showHidden = !cfg.showHidden;
+      reloadAll();
+      return;
+    }
     if (cmdEmpty && mods == 0 && isPrintable(k)) {
       if (uint32_t l = macOptLetter((uint32_t)k)) { startQS(l); return; }
     }
