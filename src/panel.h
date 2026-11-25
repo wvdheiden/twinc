@@ -7,6 +7,7 @@
 struct Entry {
   std::string name;
   bool dir = false, link = false, exec = false, broken = false, marked = false;
+  bool hidden = false;  // dotfile or UF_HIDDEN
   unsigned long long size = 0;
   time_t mtime = 0;
   mode_t mode = 0;

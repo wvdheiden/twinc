@@ -52,10 +52,12 @@ bool Panel::load(const std::string& focusName) {
     if (!cfg.showHidden && n[0] == '.') continue;
     Entry x;
     x.name = n;
+    x.hidden = n[0] == '.';
     std::string fp = joinPath(path, n);
     struct stat st;
     if (lstat(fp.c_str(), &st) == 0) {
       if (!cfg.showHidden && (st.st_flags & UF_HIDDEN)) continue;
+      x.hidden = n[0] == '.' || (st.st_flags & UF_HIDDEN);
       x.mode = st.st_mode;
       x.size = (unsigned long long)st.st_size;
       x.mtime = st.st_mtime;
@@ -131,6 +133,7 @@ void Panel::loadArchive(const std::string& focusName) {
     if (!cfg.showHidden && (name[0] == '.' || name == "__MACOSX")) continue;
     Entry& en = m[name];
     en.name = name;
+    en.hidden = name[0] == '.' || name == "__MACOSX";
     if (sl == std::string::npos) {
       en.dir = en.dir || a.dir;
       en.link = a.link;
@@ -301,6 +304,7 @@ static std::string sizeField(const Entry& en) {
 static Attr entryAttr(const Entry& en, bool isCur) {
   if (isCur) return en.marked ? mk(C_YELLOW, C_CYAN) : mk(C_BLACK, C_CYAN);
   if (en.marked) return mk(C_YELLOW, C_BLUE);
+  if (en.hidden) return mk(en.dir ? C_LGRAY : C_CYAN, C_BLUE);  // dimmed
   if (en.dir) return mk(C_WHITE, C_BLUE);
   return mk(C_LCYAN, C_BLUE);
 }

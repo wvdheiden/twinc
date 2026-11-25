@@ -60,7 +60,7 @@ source /usr/local/share/ncmac/ncm.zsh            # .pkg
 | Ctrl-J (Ctrl-Enter) / Alt-Enter | bestandsnaam / volledig pad op de commandoregel |
 | Esc | commandoregel wissen |
 | Shift-F9 | setup opslaan |
-| Alt-. | verborgen bestanden tonen/verbergen (dotfiles en in Finder verborgen), ook via F9 → Options |
+| Alt-. | verborgen bestanden tonen/verbergen (dotfiles en in Finder verborgen; in een gedimde kleur), ook via F9 → Options |
 
 Enter op een bestand: een map gaat open; een archief gaat open als map; een script wordt uitgevoerd; al het andere opent met de bijbehorende Mac-app (`open`).
 
