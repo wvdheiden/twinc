@@ -9,7 +9,7 @@
 
 #include "term.h"
 
-#define NCMAC_VERSION "1.0.0"
+#define TWINC_VERSION "1.0.1"
 
 struct Config {
   bool showHidden = false;

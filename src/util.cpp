@@ -65,7 +65,15 @@ std::string homeDir() {
 std::string configDir() {
   const char* x = getenv("XDG_CONFIG_HOME");
   std::string base = (x && *x) ? std::string(x) : homeDir() + "/.config";
-  return base + "/ncmac";
+  std::string dir = base + "/twinc";
+  // one-time migration from the old name
+  struct stat st;
+  std::string old = base + "/ncmac";
+  if (lstat(dir.c_str(), &st) != 0 && lstat(old.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+    rename(old.c_str(), dir.c_str());
+  std::string oc = dir + "/ncmac.conf", nc = dir + "/twinc.conf";
+  if (lstat(nc.c_str(), &st) != 0 && lstat(oc.c_str(), &st) == 0) rename(oc.c_str(), nc.c_str());
+  return dir;
 }
 
 std::string expandTilde(const std::string& p) {

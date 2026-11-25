@@ -12,7 +12,7 @@ MM  := $(wildcard src/*.mm)
 OBJ := $(SRC:src/%.cpp=build/%.o) $(MM:src/%.mm=build/%.o)
 HDR := $(wildcard src/*.h)
 
-ncmac: $(OBJ)
+twinc: $(OBJ)
 	$(CXX) $(ALL_CXXFLAGS) -o $@ $(OBJ) $(LDLIBS)
 
 build/%.o: src/%.cpp $(HDR) | build
@@ -29,12 +29,12 @@ universal:
 	$(MAKE) clean
 	$(MAKE) ARCHFLAGS="-arch arm64 -arch x86_64"
 
-install: ncmac
-	install -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/ncmac
-	install -m 755 ncmac $(DESTDIR)$(PREFIX)/bin/ncmac
-	install -m 644 ncm.zsh $(DESTDIR)$(PREFIX)/share/ncmac/ncm.zsh
+install: twinc
+	install -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/twinc
+	install -m 755 twinc $(DESTDIR)$(PREFIX)/bin/twinc
+	install -m 644 ncm.zsh $(DESTDIR)$(PREFIX)/share/twinc/ncm.zsh
 
 clean:
-	rm -rf build ncmac
+	rm -rf build twinc
 
 .PHONY: universal install clean

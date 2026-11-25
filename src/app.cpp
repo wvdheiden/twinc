@@ -173,7 +173,7 @@ struct App {
       signal(SIGPIPE, SIG_DFL);
       signal(SIGWINCH, SIG_DFL);
       if (chdir(cp().realDir().c_str()) != 0) {}
-      setenv("NCMAC_OTHER", op().path.c_str(), 1);
+      setenv("TWINC_OTHER", op().path.c_str(), 1);
       execl(shell.c_str(), shell.c_str(), "-c", command.c_str(), (char*)nullptr);
       _exit(127);
     }
@@ -193,7 +193,7 @@ struct App {
     if (echo) term::write(prompt() + command + "\n");
     spawn(command);
     if (pause) {
-      term::write("\n\x1b[7m Press any key to return to ncmac \x1b[0m");
+      term::write("\n\x1b[7m Press any key to return to twinc \x1b[0m");
       term::setRaw(true);
       int k;
       do k = term::readKey(-1); while (k == K_RESIZE || k == K_NONE || k == K_TIMEOUT);
@@ -369,7 +369,7 @@ struct App {
   std::string tempDir() {
     if (tmpRoot.empty()) {
       const char* t = getenv("TMPDIR");
-      tmpRoot = normPath((t && *t) ? t : "/tmp") + "/ncmac-" + std::to_string(getpid());
+      tmpRoot = normPath((t && *t) ? t : "/tmp") + "/twinc-" + std::to_string(getpid());
     }
     std::string d = tmpRoot + "/" + std::to_string(++tmpCounter);
     mkdirP(d);
@@ -914,7 +914,7 @@ struct App {
   void writeDefaultMenu(const std::string& f) {
     mkdirP(parentPath(f));
     std::ofstream o(f);
-    o << "# ncmac user menu (F2)\n"
+    o << "# twinc user menu (F2)\n"
          "# A line '<hotkey>: <description>' starts an entry; the indented lines below it\n"
          "# are the shell commands. Substitutions:\n"
          "#   %f  current file      %s  selected files (or current)\n"
@@ -1008,7 +1008,7 @@ struct App {
   // ------------------------------------------------------------ help
 
   void help() {
-    ui::text("ncmac - Help",
+    ui::text("twinc - Help",
              {"Panels",
               "  Tab                  switch panel",
               "  Arrows PgUp PgDn     move;  Home/End first/last",
@@ -1052,7 +1052,7 @@ struct App {
 
   // ------------------------------------------------------------ setup
 
-  std::string cfgFile() const { return configDir() + "/ncmac.conf"; }
+  std::string cfgFile() const { return configDir() + "/twinc.conf"; }
 
   static const char* viewName(View v) { return v == View::Brief ? "brief" : v == View::Info ? "info" : "full"; }
   static const char* sortName(Sort s) {
@@ -1382,7 +1382,7 @@ struct App {
   }
 
   void quit() {
-    int r = ui::message("ncmac", {"Do you want to quit ncmac?"}, {"Yes", "No"});
+    int r = ui::message("twinc", {"Do you want to quit twinc?"}, {"Yes", "No"});
     if (r == 0) running = false;
   }
 
@@ -1605,14 +1605,14 @@ struct App {
 
 void usage() {
   printf(
-      "ncmac %s - a two-panel file manager for the macOS terminal\n\n"
-      "usage: ncmac [options] [leftdir [rightdir]]\n\n"
+      "twinc %s - a two-panel file manager for the macOS terminal\n\n"
+      "usage: twinc [options] [leftdir [rightdir]]\n\n"
       "  -s, --size COLSxROWS   resize the terminal window at start (e.g. 80x25)\n"
       "  -l, --lastdir FILE     write the active directory to FILE on exit\n"
       "      --keytest          show which codes your terminal sends for keys\n"
       "  -h, --help             this help\n"
       "  -v, --version          version\n",
-      NCMAC_VERSION);
+      TWINC_VERSION);
 }
 
 }  // namespace
@@ -1636,7 +1636,7 @@ int main(int argc, char** argv) {
     } else if (a == "--keytest") {
       return term::keyTest();
     } else if (a == "-v" || a == "--version") {
-      printf("ncmac %s\n", NCMAC_VERSION);
+      printf("twinc %s\n", TWINC_VERSION);
       return 0;
     } else {
       dirs.push_back(a);
@@ -1654,7 +1654,7 @@ int main(int argc, char** argv) {
   app.loadHistory();
 
   if (!term::init()) {
-    fprintf(stderr, "ncmac: needs an interactive terminal\n");
+    fprintf(stderr, "twinc: needs an interactive terminal\n");
     return 1;
   }
   term::setMouse(cfg.mouse);

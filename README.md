@@ -1,8 +1,8 @@
-# ncmac
+# twinc
 
-A fast two-panel file manager for the macOS terminal, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. (Nederlands: [README.nl.md](README.nl.md))
+(Formerly **ncmac**.) A fast two-panel file manager for the macOS terminal, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. (Nederlands: [README.nl.md](README.nl.md))
 
-![ncmac: marking files, copying, browsing a zip, the pull-down menu and the viewer](docs/demo.gif)
+![twinc: marking files, copying, browsing a zip, the pull-down menu and the viewer](docs/demo.gif)
 
 ## Install
 
@@ -11,10 +11,10 @@ A fast two-panel file manager for the macOS terminal, in the style of the classi
 ```sh
 brew tap wvdheiden/tap
 brew trust wvdheiden/tap        # Homebrew 7+: allow this third-party tap
-brew install ncmac
+brew install twinc
 ```
 
-**Installer package:** download the signed and notarized `ncmac-<version>.pkg` from [Releases](https://github.com/wvdheiden/ncmac/releases). It installs to `/usr/local/bin`.
+**Installer package:** download the signed and notarized `twinc-<version>.pkg` from [Releases](https://github.com/wvdheiden/twinc/releases). It installs to `/usr/local/bin`.
 
 **From source**
 
@@ -24,11 +24,11 @@ make && make install PREFIX=~/.local
 
 ### Shell integration (recommended)
 
-Add one line to `~/.zshrc`. You then start ncmac with `ncm`, and after F10 your shell is in the directory you were in:
+Add one line to `~/.zshrc`. You then start twinc with `ncm`, and after F10 your shell is in the directory you were in:
 
 ```sh
-source "$(brew --prefix)/share/ncmac/ncm.zsh"      # Homebrew
-source /usr/local/share/ncmac/ncm.zsh               # .pkg
+source "$(brew --prefix)/share/twinc/ncm.zsh"      # Homebrew
+source /usr/local/share/twinc/ncm.zsh               # .pkg
 ```
 
 ## Terminal setup
@@ -37,7 +37,7 @@ source /usr/local/share/ncmac/ncm.zsh               # .pkg
 * **iTerm2:** Profiles → Keys → Left Option key = **Esc+**.
 * **Function keys:** in System Settings → Keyboard, enable **Use F1, F2, etc. keys as standard function keys**, or hold `fn`.
 * **No function keys** (for example an iPad keyboard): press **Ctrl-F**, then `1`…`9`, `0` for F1…F10. Put `s`, `a` or `c` before the digit for Shift, Alt or Ctrl. You can also tap the key bar.
-* `ncmac --keytest` shows the codes your terminal sends for each key.
+* `twinc --keytest` shows the codes your terminal sends for each key.
 
 ## Keys
 
@@ -76,7 +76,7 @@ source /usr/local/share/ncmac/ncm.zsh               # .pkg
 
 ## User menu (F2)
 
-The menu lives in `~/.config/ncmac/menu`; a `.ncmenu` file in a directory takes precedence there.
+The menu lives in `~/.config/twinc/menu`; a `.ncmenu` file in a directory takes precedence there.
 
 ```
 g: Git status

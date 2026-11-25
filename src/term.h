@@ -100,6 +100,6 @@ int readKey(int timeoutMs);  // handles SIGWINCH itself (resizes scr) -> K_RESIZ
 void size(int& w, int& h);
 void requestSize(int cols, int rows);
 void write(const std::string& s);
-int keyTest();  // ncmac --keytest
+int keyTest();  // twinc --keytest
 std::string keyName(int k);
 }  // namespace term

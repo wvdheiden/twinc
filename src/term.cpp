@@ -665,7 +665,7 @@ int keyTest() {
   tcgetattr(0, &g_orig);
   g_haveOrig = true;
   setRaw(true);
-  write("ncmac key test: press keys to see what the terminal sends and how ncmac reads them.\r\n"
+  write("twinc key test: press keys to see what the terminal sends and how twinc reads them.\r\n"
         "Press q twice to quit.\r\n\r\n");
   int qs = 0;
   for (;;) {

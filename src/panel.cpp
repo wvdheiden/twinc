@@ -430,7 +430,7 @@ void Panel::drawInfo(int x, int y, int w, int h, const Panel& o) {
     if (r < y + h - 1) scr.put(x + 2, r, u8center(s, iw), a);
     r++;
   };
-  line("ncmac version " NCMAC_VERSION, hi);
+  line("twinc version " TWINC_VERSION, hi);
   line("", fr);
   char host[256] = "";
   gethostname(host, sizeof host);

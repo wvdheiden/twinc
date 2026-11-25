@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build a signed + notarized release of ncmac.
+# Build a signed + notarized release of twinc.
 #
 #   scripts/release.sh            (version taken from src/common.h)
 #
@@ -7,17 +7,17 @@
 #   * "Developer ID Application" and "Developer ID Installer" certificates in the keychain
 #     (Xcode → Settings → Accounts → Manage Certificates → +)
 #   * stored notarization credentials:
-#       xcrun notarytool store-credentials ncmac-notary --apple-id <apple-id> --team-id <TEAMID>
+#       xcrun notarytool store-credentials twinc-notary --apple-id <apple-id> --team-id <TEAMID>
 #
 # Produces in dist/:
-#   ncmac-<v>-macos.zip   signed + notarized universal binary, ncm.zsh, README, LICENSE
-#   ncmac-<v>.pkg         signed + notarized + stapled installer (/usr/local/bin/ncmac)
+#   twinc-<v>-macos.zip   signed + notarized universal binary, ncm.zsh, README, LICENSE
+#   twinc-<v>.pkg         signed + notarized + stapled installer (/usr/local/bin/twinc)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION=$(sed -n 's/^#define NCMAC_VERSION "\(.*\)"/\1/p' src/common.h)
-PROFILE=${NOTARY_PROFILE:-ncmac-notary}
-BUNDLE_ID=org.vanderheiden.ncmac
+VERSION=$(sed -n 's/^#define TWINC_VERSION "\(.*\)"/\1/p' src/common.h)
+PROFILE=${NOTARY_PROFILE:-twinc-notary}
+BUNDLE_ID=org.vanderheiden.twinc
 
 APP_ID=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)
 INST_ID=$(security find-identity -v | sed -n 's/.*"\(Developer ID Installer: [^"]*\)".*/\1/p' | head -1)
@@ -25,7 +25,7 @@ if [[ -z "$APP_ID" ]]; then
   echo "error: no 'Developer ID Application' certificate found in the keychain" >&2
   exit 1
 fi
-echo "==> ncmac $VERSION"
+echo "==> twinc $VERSION"
 echo "    signing as: $APP_ID"
 [[ -n "$INST_ID" ]] && echo "    pkg signed as: $INST_ID" || echo "    (no Developer ID Installer certificate: skipping .pkg)"
 
@@ -48,29 +48,29 @@ mkdir -p "$DIST"
 
 echo "==> building universal binary"
 make universal >/dev/null
-lipo -archs ncmac
+lipo -archs twinc
 
 echo "==> signing"
-codesign --force --options runtime --timestamp --identifier "$BUNDLE_ID" --sign "$APP_ID" ncmac
-codesign --verify --strict --verbose=2 ncmac
+codesign --force --options runtime --timestamp --identifier "$BUNDLE_ID" --sign "$APP_ID" twinc
+codesign --verify --strict --verbose=2 twinc
 
 # ---- zip with the bare binary
-STAGE="$DIST/ncmac-$VERSION"
+STAGE="$DIST/twinc-$VERSION"
 mkdir -p "$STAGE"
-cp ncmac ncm.zsh README.md LICENSE "$STAGE/"
-ZIP="$DIST/ncmac-$VERSION-macos.zip"
+cp twinc ncm.zsh README.md LICENSE "$STAGE/"
+ZIP="$DIST/twinc-$VERSION-macos.zip"
 ditto -c -k --keepParent "$STAGE" "$ZIP"
 notarize "$ZIP"
 
 # ---- installer package
 if [[ -n "$INST_ID" ]]; then
   ROOT="$DIST/pkgroot"
-  install -d "$ROOT/usr/local/bin" "$ROOT/usr/local/share/ncmac"
-  install -m 755 ncmac "$ROOT/usr/local/bin/ncmac"
-  install -m 644 ncm.zsh "$ROOT/usr/local/share/ncmac/ncm.zsh"
+  install -d "$ROOT/usr/local/bin" "$ROOT/usr/local/share/twinc"
+  install -m 755 twinc "$ROOT/usr/local/bin/twinc"
+  install -m 644 ncm.zsh "$ROOT/usr/local/share/twinc/ncm.zsh"
   pkgbuild --root "$ROOT" --identifier "$BUNDLE_ID" --version "$VERSION" --install-location / \
     "$DIST/unsigned.pkg" >/dev/null
-  PKG="$DIST/ncmac-$VERSION.pkg"
+  PKG="$DIST/twinc-$VERSION.pkg"
   productsign --sign "$INST_ID" --timestamp "$DIST/unsigned.pkg" "$PKG" >/dev/null
   rm -f "$DIST/unsigned.pkg"
   rm -rf "$ROOT"
