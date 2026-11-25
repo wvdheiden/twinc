@@ -1,5 +1,6 @@
 // Shared declarations: config, path utilities, dialogs, viewer/editor/file ops.
 #pragma once
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <ctime>
@@ -8,6 +9,19 @@
 #include <vector>
 
 #include "term.h"
+
+// ---- platform differences
+#ifdef __APPLE__
+#define ST_ATIM(st) (st).st_atimespec
+#define ST_MTIM(st) (st).st_mtimespec
+#define TWINC_OS "macOS"
+#else
+#define ST_ATIM(st) (st).st_atim
+#define ST_MTIM(st) (st).st_mtim
+#define TWINC_OS "Linux"
+#endif
+// File hidden in the GUI file manager (Finder flag on macOS; none on Linux)
+bool sysHidden(const struct stat& st);
 
 #define TWINC_VERSION "1.0.1"
 
@@ -89,6 +103,7 @@ bool fo_copyMove(const std::string& srcDir, const std::vector<std::string>& name
                  const std::string& dest, bool move);
 bool fo_delete(const std::string& dir, const std::vector<std::string>& names);
 bool fo_trash(const std::string& dir, const std::vector<std::string>& names);
-bool macTrash(const std::string& path, std::string& err);  // trash.mm
+bool sysTrash(const std::string& path, std::string& err);  // trash.mm / trash_linux.cpp
+std::string sysOpenCmd();                                   // "open" / "xdg-open"
 bool fo_dirSize(const std::string& p, unsigned long long& bytes, unsigned long long& files,
                 unsigned long long& dirs);

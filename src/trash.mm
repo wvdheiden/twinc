@@ -3,7 +3,7 @@
 
 #include <string>
 
-bool macTrash(const std::string& path, std::string& err) {
+bool sysTrash(const std::string& path, std::string& err) {
   @autoreleasepool {
     NSString* s = [[NSFileManager defaultManager] stringWithFileSystemRepresentation:path.c_str()
                                                                            length:path.size()];

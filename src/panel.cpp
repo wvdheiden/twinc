@@ -3,7 +3,12 @@
 #include <dirent.h>
 #include <limits.h>
 #include <pwd.h>
+#ifdef __APPLE__
 #include <sys/mount.h>
+#else
+#include <sys/vfs.h>
+#include <fstream>
+#endif
 #include <unistd.h>
 
 #include <algorithm>
@@ -56,8 +61,8 @@ bool Panel::load(const std::string& focusName) {
     std::string fp = joinPath(path, n);
     struct stat st;
     if (lstat(fp.c_str(), &st) == 0) {
-      if (!cfg.showHidden && (st.st_flags & UF_HIDDEN)) continue;
-      x.hidden = n[0] == '.' || (st.st_flags & UF_HIDDEN);
+      if (!cfg.showHidden && sysHidden(st)) continue;
+      x.hidden = n[0] == '.' || sysHidden(st);
       x.mode = st.st_mode;
       x.size = (unsigned long long)st.st_size;
       x.mtime = st.st_mtime;
@@ -81,7 +86,7 @@ bool Panel::load(const std::string& focusName) {
   closedir(d);
   sortEntries();
   struct stat ds;
-  if (stat(path.c_str(), &ds) == 0) dirMtime = ds.st_mtimespec;
+  if (stat(path.c_str(), &ds) == 0) dirMtime = ST_MTIM(ds);
   cur = -1;
   if (!curName.empty())
     for (size_t i = 0; i < e.size(); i++)
@@ -169,7 +174,7 @@ bool Panel::changedOnDisk() const {
   if (inArchive()) return false;
   struct stat ds;
   if (stat(path.c_str(), &ds) != 0) return true;
-  return ds.st_mtimespec.tv_sec != dirMtime.tv_sec || ds.st_mtimespec.tv_nsec != dirMtime.tv_nsec;
+  return ST_MTIM(ds).tv_sec != dirMtime.tv_sec || ST_MTIM(ds).tv_nsec != dirMtime.tv_nsec;
 }
 
 bool Panel::chdirTo(const std::string& p, std::string* err) {
@@ -416,6 +421,31 @@ void Panel::draw(int x, int y, int w, int h, bool active) {
   }
 }
 
+#ifndef __APPLE__
+// Mount point and file system type of path, from /proc/self/mounts (longest prefix).
+static void mountOf(const std::string& path, std::string& mnt, std::string& fs) {
+  std::ifstream in("/proc/self/mounts");
+  std::string dev, mp, type, rest;
+  auto unesc = [](const std::string& s) {  // \040 -> space etc.
+    std::string r;
+    for (size_t i = 0; i < s.size(); i++) {
+      if (s[i] == '\\' && i + 3 < s.size() && isdigit((unsigned char)s[i + 1])) {
+        r += (char)std::stoi(s.substr(i + 1, 3), nullptr, 8);
+        i += 3;
+      } else {
+        r += s[i];
+      }
+    }
+    return r;
+  };
+  while (in >> dev >> mp >> type && std::getline(in, rest)) {
+    mp = unesc(mp);
+    bool match = mp == "/" || path == mp || path.rfind(mp + "/", 0) == 0;
+    if (match && mp.size() >= mnt.size()) { mnt = mp; fs = type; }
+  }
+}
+#endif
+
 void Panel::drawInfo(int x, int y, int w, int h, const Panel& o) {
   gx = x; gy = y; gw = w; gh = h;
   Attr fr = mk(C_LCYAN, C_BLUE);
@@ -443,7 +473,13 @@ void Panel::drawInfo(int x, int y, int w, int h, const Panel& o) {
     unsigned long long total = (unsigned long long)sf.f_blocks * sf.f_bsize;
     line(fmtThousands(avail) + " bytes free", fr);
     line("of " + fmtThousands(total) + " bytes", fr);
+#ifdef __APPLE__
     line("on " + std::string(sf.f_mntonname) + " (" + sf.f_fstypename + ")", fr);
+#else
+    std::string mnt, fs;
+    mountOf(o.realDir(), mnt, fs);
+    if (!mnt.empty()) line("on " + mnt + " (" + fs + ")", fr);
+#endif
   }
   line("", fr);
   unsigned long long bytes = 0;

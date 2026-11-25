@@ -31,6 +31,9 @@ constexpr int KM_MASK = KM_SHIFT | KM_ALT | KM_CTRL;
 constexpr int KF(int n) { return K_F1 + n - 1; }
 constexpr int keyBase(int k) { return k < 0 ? k : (k & ~KM_MASK); }
 inline bool isPrintable(int k) { return k >= 32 && k < K_SPECIAL && k != 127; }
+#ifdef CTRL  // glibc <termios.h> defines CTRL(x)
+#undef CTRL
+#endif
 constexpr int CTRL(char c) { return c & 0x1f; }
 
 struct MouseEv {

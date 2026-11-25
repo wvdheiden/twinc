@@ -10,7 +10,7 @@
 #       xcrun notarytool store-credentials twinc-notary --apple-id <apple-id> --team-id <TEAMID>
 #
 # Produces in dist/:
-#   twinc-<v>-macos.zip   signed + notarized universal binary, ncm.zsh, README, LICENSE
+#   twinc-<v>-macos.zip   signed + notarized universal binary, ncm.sh, ncm.zsh, README, LICENSE
 #   twinc-<v>.pkg         signed + notarized + stapled installer (/usr/local/bin/twinc)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -57,7 +57,7 @@ codesign --verify --strict --verbose=2 twinc
 # ---- zip with the bare binary
 STAGE="$DIST/twinc-$VERSION"
 mkdir -p "$STAGE"
-cp twinc ncm.zsh README.md LICENSE "$STAGE/"
+cp twinc ncm.sh ncm.zsh README.md LICENSE "$STAGE/"
 ZIP="$DIST/twinc-$VERSION-macos.zip"
 ditto -c -k --keepParent "$STAGE" "$ZIP"
 notarize "$ZIP"
@@ -67,7 +67,7 @@ if [[ -n "$INST_ID" ]]; then
   ROOT="$DIST/pkgroot"
   install -d "$ROOT/usr/local/bin" "$ROOT/usr/local/share/twinc"
   install -m 755 twinc "$ROOT/usr/local/bin/twinc"
-  install -m 644 ncm.zsh "$ROOT/usr/local/share/twinc/ncm.zsh"
+  install -m 644 ncm.sh ncm.zsh "$ROOT/usr/local/share/twinc/"
   pkgbuild --root "$ROOT" --identifier "$BUNDLE_ID" --version "$VERSION" --install-location / \
     "$DIST/unsigned.pkg" >/dev/null
   PKG="$DIST/twinc-$VERSION.pkg"

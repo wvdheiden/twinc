@@ -1,6 +1,6 @@
 # twinc
 
-(Formerly **ncmac**.) A fast two-panel file manager for the macOS terminal, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. (Nederlands: [README.nl.md](README.nl.md))
+(Formerly **ncmac**.) A fast two-panel file manager for the terminal on macOS and Linux, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. (Nederlands: [README.nl.md](README.nl.md))
 
 ![twinc: marking files, copying, browsing a zip, the pull-down menu and the viewer](docs/demo.gif)
 
@@ -14,9 +14,11 @@ brew trust wvdheiden/tap        # Homebrew 7+: allow this third-party tap
 brew install twinc
 ```
 
-**Installer package:** download the signed and notarized `twinc-<version>.pkg` from [Releases](https://github.com/wvdheiden/twinc/releases). It installs to `/usr/local/bin`.
+**macOS installer package:** download the signed and notarized `twinc-<version>.pkg` from [Releases](https://github.com/wvdheiden/twinc/releases). It installs to `/usr/local/bin`.
 
-**From source**
+**Linux packages:** [Releases](https://github.com/wvdheiden/twinc/releases) has a `.deb` for Debian and Ubuntu (`sudo apt install ./twinc_<version>_amd64.deb`) and a plain `.tar.gz` for other distributions, for x86_64 and arm64. They need libarchive (`libarchive13` on Debian/Ubuntu, `libarchive` on Fedora and Arch).
+
+**From source.** You need a C++17 compiler and libarchive; on Linux also its headers (`libarchive-dev` / `libarchive-devel`).
 
 ```sh
 make && make install PREFIX=~/.local
@@ -24,15 +26,17 @@ make && make install PREFIX=~/.local
 
 ### Shell integration (recommended)
 
-Add one line to `~/.zshrc`. You then start twinc with `ncm`, and after F10 your shell is in the directory you were in:
+Add one line to `~/.zshrc` or `~/.bashrc`. You then start twinc with `ncm`, and after F10 your shell is in the directory you were in:
 
 ```sh
-source "$(brew --prefix)/share/twinc/ncm.zsh"      # Homebrew
-source /usr/local/share/twinc/ncm.zsh               # .pkg
+source "$(brew --prefix)/share/twinc/ncm.sh"      # Homebrew
+source /usr/local/share/twinc/ncm.sh               # macOS .pkg
+source /usr/share/twinc/ncm.sh                     # Linux .deb
 ```
 
 ## Terminal setup
 
+* **Linux:** most terminals (GNOME Terminal, Konsole, xterm, kitty) send function keys and Alt as twinc expects. Some desktops claim F1, F10 or Alt-F1…F10 for themselves; switch those shortcuts off in the terminal or desktop settings, or use Ctrl-F (below).
 * **Terminal.app:** Settings → Profiles → Keyboard → enable **Use Option as Meta key**. Alt-F7, Alt+letter quick search and similar keys need this.
 * **iTerm2:** Profiles → Keys → Left Option key = **Esc+**.
 * **Function keys:** in System Settings → Keyboard, enable **Use F1, F2, etc. keys as standard function keys**, or hold `fn`.
@@ -66,11 +70,11 @@ source /usr/local/share/twinc/ncm.zsh               # .pkg
 **Enter** opens what is under the cursor:
 * a directory or an archive is shown in the panel;
 * a script is run;
-* anything else opens in its macOS app.
+* anything else opens in its default app (`open` on macOS, `xdg-open` on Linux). Without a desktop, for example over SSH, it opens in the built-in viewer.
 
 **Archives** open like directories, read-only. Supported formats: zip, tar.gz/bz2/xz/zst, 7z, rar, iso, cpio, xar, cab, jar, deb, rpm and more (via the system libarchive). F3 views a file in the archive and F5 extracts files to the other panel.
 
-**F8** moves to the Trash, the same way Finder does. You can switch this off under F9 → Options.
+**F8** moves to the Trash, the same way Finder does. On Linux it uses the desktop Trash (`~/.local/share/Trash`), so you can restore from your file manager. You can switch this off under F9 → Options.
 
 **Mouse:** click to select, double-click to open, right-click to mark, scroll with the wheel. Clicking the key bar presses that key.
 

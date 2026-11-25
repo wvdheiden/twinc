@@ -1,0 +1,44 @@
+# Builds the Linux packages (.tar.gz and .deb, x86_64 and arm64) and attaches
+# them to the GitHub release of the tag. Ubuntu 22.04 is used on purpose: its
+# older glibc makes the binary run on most current distributions.
+name: Linux packages
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq g++ make libarchive-dev
+      - name: Build packages
+        run: scripts/package-linux.sh
+      - name: Smoke test
+        run: |
+          ./twinc --version
+          sudo apt-get install -y -qq ./dist/*.deb
+          twinc --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.runner }}
+          path: dist/*
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --draft --title "twinc ${GITHUB_REF_NAME#v}" --notes "Release notes follow."
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber

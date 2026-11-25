@@ -2,13 +2,21 @@ CXX      ?= clang++
 CXXFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter
 PREFIX   ?= /usr/local
 ARCHFLAGS ?=
+UNAME    := $(shell uname -s)
+
+ifeq ($(UNAME),Darwin)
 MINOS    := -mmacosx-version-min=11.0
+LDLIBS   := -framework Foundation -larchive
+MM       := $(wildcard src/*.mm)
+else
+MINOS    :=
+LDLIBS   := -larchive
+MM       :=
+endif
 
 ALL_CXXFLAGS := -std=c++17 $(MINOS) $(ARCHFLAGS) $(CXXFLAGS)
-LDLIBS   := -framework Foundation -larchive
 
 SRC := $(wildcard src/*.cpp)
-MM  := $(wildcard src/*.mm)
 OBJ := $(SRC:src/%.cpp=build/%.o) $(MM:src/%.mm=build/%.o)
 HDR := $(wildcard src/*.h)
 
@@ -32,7 +40,7 @@ universal:
 install: twinc
 	install -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/twinc
 	install -m 755 twinc $(DESTDIR)$(PREFIX)/bin/twinc
-	install -m 644 ncm.zsh $(DESTDIR)$(PREFIX)/share/twinc/ncm.zsh
+	install -m 644 ncm.sh ncm.zsh $(DESTDIR)$(PREFIX)/share/twinc/
 
 clean:
 	rm -rf build twinc

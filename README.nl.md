@@ -1,6 +1,6 @@
 # twinc
 
-Een two-panel filemanager voor de Mac-terminal in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
+(Voorheen **ncmac**.) Een two-panel filemanager voor de terminal op macOS en Linux, in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
 
 ![twinc in actie](docs/demo.gif)
 
@@ -12,23 +12,29 @@ brew trust wvdheiden/tap                  # Homebrew 7+: deze tap toestaan
 brew install twinc
 ```
 
-Of download de ondertekende `twinc-<versie>.pkg` van de GitHub-releases, of bouw zelf:
+Of download van de [GitHub-releases](https://github.com/wvdheiden/twinc/releases):
+* **macOS:** de ondertekende `twinc-<versie>.pkg`;
+* **Linux:** een `.deb` voor Debian en Ubuntu (`sudo apt install ./twinc_<versie>_amd64.deb`) of een `.tar.gz` voor andere distributies, voor x86_64 en arm64. Nodig: libarchive.
+
+Of bouw zelf (C++17-compiler en libarchive; op Linux ook `libarchive-dev`):
 
 ```sh
 make && make install PREFIX=~/.local
 ```
 
-Zet daarna dit in `~/.zshrc`. Dan start je met `ncm`, en na F10 staat je shell in de map waar je in twinc was:
+Zet daarna dit in `~/.zshrc` of `~/.bashrc`. Dan start je met `ncm`, en na F10 staat je shell in de map waar je in twinc was:
 
 ```sh
-source "$(brew --prefix)/share/twinc/ncm.zsh"   # Homebrew
-source /usr/local/share/twinc/ncm.zsh            # .pkg
+source "$(brew --prefix)/share/twinc/ncm.sh"   # Homebrew
+source /usr/local/share/twinc/ncm.sh            # macOS .pkg
+source /usr/share/twinc/ncm.sh                  # Linux .deb
 ```
 
-`nc` zelf is op macOS al netcat; wil je toch `nc` typen, zet dan `alias nc=ncm` in je `.zshrc`.
+`nc` zelf is al netcat; wil je toch `nc` typen, zet dan `alias nc=ncm` in je shell-configuratie.
 
 ## Terminal-instellingen (belangrijk)
 
+* **Linux:** de meeste terminals (GNOME Terminal, Konsole, xterm, kitty) werken zo. Sommige desktops pakken F1, F10 of Alt-F1…F10 zelf af; zet die sneltoetsen uit in de terminal- of desktopinstellingen, of gebruik Ctrl-F (hieronder).
 * **Terminal.app** → Instellingen → Profielen → Toetsenbord: vink **"Gebruik Option als Meta-toets"** aan (voor Alt-toetsen zoals Alt-F7 en Alt+letter quick search).
 * **iTerm2** → Profiles → Keys: Left Option = **Esc+**.
 * Systeeminstellingen → Toetsenbord: **"Gebruik F1, F2 enz. als standaard functietoetsen"**, anders moet je `fn` erbij houden. Mission Control pakt sommige Ctrl-F-toetsen af; alles zit ook in het F9-menu.
@@ -62,14 +68,14 @@ source /usr/local/share/twinc/ncm.zsh            # .pkg
 | Shift-F9 | setup opslaan |
 | Alt-. | verborgen bestanden tonen/verbergen (dotfiles en in Finder verborgen; in een gedimde kleur), ook via F9 → Options |
 
-Enter op een bestand: een map gaat open; een archief gaat open als map; een script wordt uitgevoerd; al het andere opent met de bijbehorende Mac-app (`open`).
+Enter op een bestand: een map gaat open; een archief gaat open als map; een script wordt uitgevoerd; al het andere opent met de standaard-app (`open` op macOS, `xdg-open` op Linux). Zonder desktop, bijvoorbeeld via SSH, opent het in de ingebouwde viewer.
 
 ### Archieven
 
-Enter op een zip, tar(.gz/.bz2/.xz/.zst), tgz, 7z, rar, iso, cpio, xar, cab, jar, deb, rpm … opent het archief als map (via de libarchive van macOS). Ctrl-PgDn probeert élk bestand als archief te openen. Binnen een archief:
+Enter op een zip, tar(.gz/.bz2/.xz/.zst), tgz, 7z, rar, iso, cpio, xar, cab, jar, deb, rpm … opent het archief als map (via libarchive). Ctrl-PgDn probeert élk bestand als archief te openen. Binnen een archief:
 
 * bladeren, quick search, markeren werken gewoon; `..` in de bovenste map brengt je terug
-* F3 bekijkt een bestand, Enter opent het met de Mac-app (via een tijdelijke kopie)
+* F3 bekijkt een bestand, Enter opent het met de standaard-app (via een tijdelijke kopie)
 * F5 kopieert (uitpakken) naar het andere paneel, ook hele mappen
 * archieven zijn alleen-lezen: F4/F6/F7/F8 geven een melding
 * entries met `../` of absolute paden worden genegeerd (geen "zip slip") `cd`, `cd..`, `cd -` en `cd ~` worden intern afgehandeld.
@@ -95,4 +101,4 @@ z: Zip selectie
 * `twinc --keytest`: laat zien welke code je terminal voor een toets stuurt en hoe twinc die leest
 * `~/.config/twinc/history`: commandogeschiedenis
 
-F8 gebruikt dezelfde Prullenmand als Finder, ook die op USB- en externe schijven. Lukt dat niet (bijvoorbeeld op een netwerkschijf), dan vraagt twinc of het definitief mag. Uitzetten kan via F9 → Options → "Delete to Trash" (en Shift-F9 om dat te bewaren).
+F8 gebruikt dezelfde Prullenmand als Finder, ook die op USB- en externe schijven. Op Linux is dat de prullenbak van je desktop (`~/.local/share/Trash`), dus terugzetten kan vanuit je bestandsbeheerder. Lukt dat niet (bijvoorbeeld op een netwerkschijf), dan vraagt twinc of het definitief mag. Uitzetten kan via F9 → Options → "Delete to Trash" (en Shift-F9 om dat te bewaren).

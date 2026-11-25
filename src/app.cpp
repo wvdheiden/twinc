@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <limits.h>
+#include <pwd.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -203,20 +204,34 @@ struct App {
     reloadAll();
   }
 
-  void openWithMac(const std::string& path) {
+  // Open with the default application (open(1) on macOS, xdg-open on Linux).
+  // Returns false if no application could be started.
+  bool openWith(const std::string& path) {
+#ifndef __APPLE__
+    const char* dpy = getenv("DISPLAY");
+    const char* way = getenv("WAYLAND_DISPLAY");
+    if (!(dpy && *dpy) && !(way && *way)) return false;  // text console / ssh: no GUI apps
+#endif
+    std::string cmdName = sysOpenCmd();
     pid_t pid = fork();
     if (pid == 0) {
       int fd = open("/dev/null", O_RDWR);
       if (fd >= 0) { dup2(fd, 1); dup2(fd, 2); }
-      execl("/usr/bin/open", "open", path.c_str(), (char*)nullptr);
+      execlp(cmdName.c_str(), cmdName.c_str(), path.c_str(), (char*)nullptr);
       _exit(127);
     }
-    if (pid > 0) {
-      int st;
-      waitpid(pid, &st, 0);
-      if (WIFEXITED(st) && WEXITSTATUS(st) != 0)
-        ui::message("Open", {"No application is associated with", baseName(path)}, {"OK"});
-    }
+    if (pid < 0) return false;
+    int st;
+    waitpid(pid, &st, 0);
+    if (WIFEXITED(st) && WEXITSTATUS(st) == 127) return false;
+    if (WIFEXITED(st) && WEXITSTATUS(st) != 0)
+      ui::message("Open", {"No application is associated with", baseName(path)}, {"OK"});
+    return true;
+  }
+
+  // Enter on a file: default app, or the built-in viewer when there is no GUI.
+  void openFile(const std::string& path) {
+    if (!openWith(path)) runViewer(path);
   }
 
   bool tryCd(const std::string& c) {
@@ -339,7 +354,9 @@ struct App {
     std::string full = joinPath(p.path, e->name);
     if (e->dir) {
       std::string ext = toLower(e->name.size() > 4 ? e->name.substr(e->name.size() - 4) : "");
-      if (!forceInto && ext == ".app") { openWithMac(full); return; }
+#ifdef __APPLE__
+      if (!forceInto && ext == ".app") { openWith(full); return; }
+#endif
       goDir(act, full);
       return;
     }
@@ -358,7 +375,7 @@ struct App {
       execCommand("./" + shellQuote(n));
       return;
     }
-    openWithMac(full);
+    openFile(full);
   }
 
   // ------------------------------------------------------------ archives
@@ -406,7 +423,7 @@ struct App {
       return;
     }
     std::string f = extractToTemp(e.name);
-    if (!f.empty()) openWithMac(f);
+    if (!f.empty()) openFile(f);
   }
 
   bool readOnly() {
@@ -568,7 +585,13 @@ struct App {
   }
 
   bool inTrash(const std::string& path) const {
+#ifdef __APPLE__
     std::string t = homeDir() + "/.Trash";
+#else
+    const char* xd = getenv("XDG_DATA_HOME");
+    std::string t = ((xd && *xd) ? std::string(xd) : homeDir() + "/.local/share") + "/Trash";
+    if (path.find("/.Trash-" + std::to_string(getuid())) != std::string::npos) return true;
+#endif
     if (path == t || path.rfind(t + "/", 0) == 0) return true;
     return path.find("/.Trashes/") != std::string::npos ||
            (path.size() >= 9 && path.compare(path.size() - 9, 9, "/.Trashes") == 0);
@@ -603,11 +626,29 @@ struct App {
       std::string d = homeDir() + "/" + sub;
       if (isDir(d)) paths.push_back(d);
     }
+#ifdef __APPLE__
     paths.push_back("/Applications");
-    if (DIR* d = opendir("/Volumes")) {
+    std::vector<std::string> volRoots = {"/Volumes"};
+    std::string user;
+#else
+    struct passwd* pw = getpwuid(getuid());
+    std::string user = pw ? pw->pw_name : "";
+    std::vector<std::string> volRoots = {"/media/" + user, "/run/media/" + user, "/mnt", "/media"};
+#endif
+    for (auto& root : volRoots)
+    if (DIR* d = opendir(root.c_str())) {
       while (dirent* de = readdir(d)) {
         if (de->d_name[0] == '.') continue;
-        std::string v = std::string("/Volumes/") + de->d_name;
+        std::string v = root + "/" + de->d_name;
+        if (!isDir(v) || std::find(paths.begin(), paths.end(), v) != paths.end()) continue;
+        if (v == "/media/" + user || v == "/run/media/" + user) continue;
+#ifndef __APPLE__
+        {  // only real mount points, no symlinked duplicates (/media/cdrom -> cdrom0)
+          struct stat vs, rs;
+          if (lstat(v.c_str(), &vs) != 0 || !S_ISDIR(vs.st_mode)) continue;
+          if (stat(root.c_str(), &rs) != 0 || vs.st_dev == rs.st_dev) continue;
+        }
+#endif
         char rp[PATH_MAX];
         if (realpath(v.c_str(), rp) && std::string(rp) == "/") continue;
         paths.push_back(v);
@@ -710,7 +751,7 @@ struct App {
           if (de->d_type != DT_DIR && de->d_type != DT_UNKNOWN) continue;  // skips symlinks: no cycles
           struct stat st;
           if (lstat(full.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
-          if (!keep && !cfg.showHidden && (st.st_flags & UF_HIDDEN)) continue;
+          if (!keep && !cfg.showHidden && sysHidden(st)) continue;
           v.push_back(n);
         }
         closedir(d);
@@ -930,12 +971,19 @@ struct App {
          "    zip -r archive.zip %s\n"
          "u: Unpack current archive\n"
          "    tar -xvf %f\n"
+#ifdef __APPLE__
          "q: Quick Look current file\n"
          "    qlmanage -p %f >/dev/null 2>&1\n"
          "r: Reveal current file in Finder\n"
          "    open -R %f\n"
          "c: Copy full path of current file to clipboard\n"
          "    printf '%%s' %d/%f | pbcopy\n";
+#else
+         "o: Open current directory in the file manager\n"
+         "    xdg-open . >/dev/null 2>&1\n"
+         "c: Copy full path of current file to clipboard\n"
+         "    printf '%%s' %d/%f | (wl-copy 2>/dev/null || xclip -selection clipboard)\n";
+#endif
   }
 
   std::vector<UItem> parseMenu(const std::string& f) {
@@ -1012,7 +1060,7 @@ struct App {
              {"Panels",
               "  Tab                  switch panel",
               "  Arrows PgUp PgDn     move;  Home/End first/last",
-              "  Enter                enter directory or archive / run script / open with macOS",
+              "  Enter                enter directory or archive / run script / open with default app",
               "                       (zip, tar.gz/bz2/xz/zst, 7z, rar, iso, ... are read-only;",
               "                        F3 views and F5 copies files out of an archive)",
               "  Ctrl-PgUp            parent directory     Ctrl-PgDn  enter (also .app)",
@@ -1179,7 +1227,11 @@ struct App {
         {"-", "", 0, nullptr},
         {"Swap panels", "Ctrl-U", A_SWAP, nullptr},
         {"Panels on/off", "Ctrl-O", A_PANELS, nullptr},
+        #ifdef __APPLE__
         {"Open in Finder", "", A_FINDER, nullptr},
+#else
+        {"Open in file manager", "", A_FINDER, nullptr},
+#endif
         {"-", "", 0, nullptr},
         {"Edit user menu", "", A_EDITMENU, nullptr}}, 0};
     Menu opts{"Options", {
@@ -1365,7 +1417,10 @@ struct App {
       case A_COMPARE: compareDirs(); break;
       case A_SWAP: std::swap(P[0], P[1]); act = 1 - act; break;
       case A_PANELS: userScreen(); break;
-      case A_FINDER: openWithMac(cp().realDir()); break;
+      case A_FINDER:
+        if (!openWith(cp().realDir()))
+          ui::message("Open", {"No graphical file manager available."}, {"OK"});
+        break;
       case A_EDITMENU:
         if (!existsL(menuFile())) writeDefaultMenu(menuFile());
         runEditor(menuFile());
@@ -1605,7 +1660,7 @@ struct App {
 
 void usage() {
   printf(
-      "twinc %s - a two-panel file manager for the macOS terminal\n\n"
+      "twinc %s - a two-panel file manager for the terminal\n\n"
       "usage: twinc [options] [leftdir [rightdir]]\n\n"
       "  -s, --size COLSxROWS   resize the terminal window at start (e.g. 80x25)\n"
       "  -l, --lastdir FILE     write the active directory to FILE on exit\n"

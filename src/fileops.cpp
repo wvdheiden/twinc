@@ -1,5 +1,10 @@
 // Copy / move / delete with progress, overwrite confirmation and abort (Esc).
+#ifdef __APPLE__
 #include <copyfile.h>
+#else
+#include <linux/fs.h>
+#include <sys/ioctl.h>
+#endif
 #include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -99,6 +104,7 @@ int askOverwrite(Op& op, const std::string& dst, const struct stat& s, const str
   return -1;
 }
 
+#ifdef __APPLE__
 int cfCallback(int what, int stage, copyfile_state_t state, const char*, const char*, void* ctx) {
   Op* op = (Op*)ctx;
   if (stage == COPYFILE_ERR) return what == COPYFILE_COPY_DATA ? COPYFILE_QUIT : COPYFILE_CONTINUE;
@@ -111,13 +117,62 @@ int cfCallback(int what, int stage, copyfile_state_t state, const char*, const c
   }
   return COPYFILE_CONTINUE;
 }
+#endif
 
 void setTimes(const std::string& p, const struct stat& st) {
-  struct timespec ts[2] = {st.st_atimespec, st.st_mtimespec};
+  struct timespec ts[2] = {ST_ATIM(st), ST_MTIM(st)};
   utimensat(AT_FDCWD, p.c_str(), ts, AT_SYMLINK_NOFOLLOW);
 }
 
 int copyRec(const std::string& src, const std::string& dst, Op& op);
+
+#ifndef __APPLE__
+// Linux: reflink clone (btrfs/xfs) if possible, else copy_file_range / read+write
+// in chunks with progress and Esc abort.
+int copyData(const std::string& src, const std::string& dst, const struct stat& st, Op& op) {
+  int in = open(src.c_str(), O_RDONLY | O_CLOEXEC);
+  if (in < 0) return -1;
+  int out = open(dst.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+  if (out < 0) { int e = errno; close(in); errno = e; return -1; }
+  int r = 0;
+  if (ioctl(out, FICLONE, in) == 0) {
+    op.curDone = (unsigned long long)st.st_size;
+  } else {
+    const size_t chunk = 4 << 20;
+    bool cfr = true;
+    std::vector<char> buf;
+    for (;;) {
+      ssize_t n = -1;
+      if (cfr) {
+        n = copy_file_range(in, nullptr, out, nullptr, chunk, 0);
+        if (n < 0 && (errno == EXDEV || errno == ENOSYS || errno == EINVAL || errno == EOPNOTSUPP)) {
+          cfr = false;
+          continue;
+        }
+      } else {
+        if (buf.empty()) buf.resize(1 << 20);
+        n = read(in, buf.data(), buf.size());
+        for (ssize_t w = 0; n > 0 && w < n;) {
+          ssize_t k = write(out, buf.data() + w, (size_t)(n - w));
+          if (k < 0) { if (errno == EINTR) continue; n = -1; break; }
+          w += k;
+        }
+      }
+      if (n < 0) { if (errno == EINTR) continue; r = -1; break; }
+      if (n == 0) break;
+      op.curDone += (unsigned long long)n;
+      op.show();
+      if (op.poll()) { r = -1; errno = ECANCELED; break; }
+    }
+  }
+  int e = errno;
+  if (r == 0) fchmod(out, st.st_mode & 07777);
+  if (close(out) != 0 && r == 0) { r = -1; e = errno; }
+  close(in);
+  errno = e;
+  return r;
+}
+#endif
 
 int copyReg(const std::string& src, const std::string& dst, const struct stat& st, Op& op) {
   op.cur = src;
@@ -126,12 +181,17 @@ int copyReg(const std::string& src, const std::string& dst, const struct stat& s
   op.curDone = 0;
   op.show();
   if (op.poll()) return -1;
+#ifdef __APPLE__
   copyfile_state_t s = copyfile_state_alloc();
   copyfile_state_set(s, COPYFILE_STATE_STATUS_CB, (const void*)&cfCallback);
   copyfile_state_set(s, COPYFILE_STATE_STATUS_CTX, (const void*)&op);
   int r = copyfile(src.c_str(), dst.c_str(), s, COPYFILE_CLONE);
   int err = errno;
   copyfile_state_free(s);
+#else
+  int r = copyData(src, dst, st, op);
+  int err = errno;
+#endif
   op.curSize = op.curDone = 0;
   if (r < 0) {
     unlink(dst.c_str());
@@ -166,7 +226,11 @@ int copyRec(const std::string& src, const std::string& dst, Op& op) {
       if (r < 0) return -1;
       if (r > 0) res = 1;
     }
+#ifdef __APPLE__
     copyfile(src.c_str(), dst.c_str(), nullptr, COPYFILE_METADATA);
+#else
+    chmod(dst.c_str(), st.st_mode & 07777);
+#endif
     setTimes(dst, st);
     return res;
   }
@@ -191,6 +255,16 @@ int copyRec(const std::string& src, const std::string& dst, Op& op) {
   return errAsk(op, "Cannot copy special file " + displayPath(src), ENOTSUP);
 }
 
+// Clear immutable flags (macOS uchg) so a delete can be retried.
+int clearFlags(const char* p, int) {
+#ifdef __APPLE__
+  return lchflags(p, 0);
+#else
+  (void)p;
+  return -1;
+#endif
+}
+
 int removeRec(const std::string& p, Op& op, bool count) {
   if (op.cancel) return -1;
   struct stat st;
@@ -209,7 +283,7 @@ int removeRec(const std::string& p, Op& op, bool count) {
       if (r > 0) res = 1;
     }
     if (res == 0 && rmdir(p.c_str()) != 0) {
-      if (!(errno == EPERM && lchflags(p.c_str(), 0) == 0 && rmdir(p.c_str()) == 0))
+      if (!(errno == EPERM && clearFlags(p.c_str(), 0) == 0 && rmdir(p.c_str()) == 0))
         return errAsk(op, "Cannot delete directory " + displayPath(p), errno);
     }
     return res;
@@ -219,7 +293,7 @@ int removeRec(const std::string& p, Op& op, bool count) {
   op.show();
   if (op.poll()) return -1;
   if (unlink(p.c_str()) != 0) {
-    if (!(errno == EPERM && lchflags(p.c_str(), 0) == 0 && unlink(p.c_str()) == 0))
+    if (!(errno == EPERM && clearFlags(p.c_str(), 0) == 0 && unlink(p.c_str()) == 0))
       return errAsk(op, "Cannot delete " + displayPath(p), errno);
   }
   if (count) {
@@ -364,7 +438,7 @@ bool fo_trash(const std::string& dir, const std::vector<std::string>& names) {
     op.show();
     if (op.poll()) break;
     std::string err;
-    if (macTrash(p, err)) {
+    if (sysTrash(p, err)) {
       op.doneFiles++;
       continue;
     }
@@ -443,7 +517,7 @@ bool fo_arcExtract(const std::string& arc, const std::string& inDir, const std::
       struct stat ss;
       memset(&ss, 0, sizeof ss);
       ss.st_size = (off_t)e.size;
-      ss.st_mtimespec.tv_sec = e.mtime;
+      ST_MTIM(ss).tv_sec = e.mtime;
       int a = askOverwrite(op, target, ss, dt);
       if (a < 0) break;
       if (a > 0) continue;

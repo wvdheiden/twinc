@@ -232,3 +232,20 @@ bool matchMasks(const std::vector<std::string>& masks, const std::string& name) 
     if (fnmatch(m.c_str(), name.c_str(), FNM_CASEFOLD) == 0) return true;
   return false;
 }
+
+bool sysHidden(const struct stat& st) {
+#ifdef __APPLE__
+  return (st.st_flags & UF_HIDDEN) != 0;
+#else
+  (void)st;
+  return false;
+#endif
+}
+
+std::string sysOpenCmd() {
+#ifdef __APPLE__
+  return "/usr/bin/open";
+#else
+  return "xdg-open";
+#endif
+}
