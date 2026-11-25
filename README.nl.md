@@ -1,28 +1,28 @@
-# ncmac
+# twinc
 
 Een two-panel filemanager voor de Mac-terminal in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
 
-![ncmac in actie](docs/demo.gif)
+![twinc in actie](docs/demo.gif)
 
 ## Installeren
 
 ```sh
 brew tap wvdheiden/tap
 brew trust wvdheiden/tap                  # Homebrew 7+: deze tap toestaan
-brew install ncmac
+brew install twinc
 ```
 
-Of download de ondertekende `ncmac-<versie>.pkg` van de GitHub-releases, of bouw zelf:
+Of download de ondertekende `twinc-<versie>.pkg` van de GitHub-releases, of bouw zelf:
 
 ```sh
 make && make install PREFIX=~/.local
 ```
 
-Zet daarna dit in `~/.zshrc`. Dan start je met `ncm`, en na F10 staat je shell in de map waar je in ncmac was:
+Zet daarna dit in `~/.zshrc`. Dan start je met `ncm`, en na F10 staat je shell in de map waar je in twinc was:
 
 ```sh
-source "$(brew --prefix)/share/ncmac/ncm.zsh"   # Homebrew
-source /usr/local/share/ncmac/ncm.zsh            # .pkg
+source "$(brew --prefix)/share/twinc/ncm.zsh"   # Homebrew
+source /usr/local/share/twinc/ncm.zsh            # .pkg
 ```
 
 `nc` zelf is op macOS al netcat; wil je toch `nc` typen, zet dan `alias nc=ncm` in je `.zshrc`.
@@ -33,7 +33,7 @@ source /usr/local/share/ncmac/ncm.zsh            # .pkg
 * **iTerm2** → Profiles → Keys: Left Option = **Esc+**.
 * Systeeminstellingen → Toetsenbord: **"Gebruik F1, F2 enz. als standaard functietoetsen"**, anders moet je `fn` erbij houden. Mission Control pakt sommige Ctrl-F-toetsen af; alles zit ook in het F9-menu.
 * Geen F-toetsen (iPad)? **Ctrl-F, dan 1…9, 0** = F1…F10. Zet `s`, `a` of `c` vóór het cijfer voor Shift, Alt of Ctrl (Ctrl-F `a` `7` = Alt-F7). Je kunt ook op de toetsenbalk tikken, of snel `Esc 1` … `Esc 0` typen.
-* `ncmac -s 80x25` zet het terminalvenster op 80×25 (en zet het bij afsluiten terug). Alt-F9 schakelt 25/43/50 regels.
+* `twinc -s 80x25` zet het terminalvenster op 80×25 (en zet het bij afsluiten terug). Alt-F9 schakelt 25/43/50 regels.
 
 ## Toetsen
 
@@ -78,7 +78,7 @@ Muis: klik selecteert, dubbelklik opent, rechtsklik markeert, het wiel scrollt e
 
 ## User menu (F2)
 
-`~/.config/ncmac/menu` (een `.ncmenu` in een map gaat voor). Formaat:
+`~/.config/twinc/menu` (een `.ncmenu` in een map gaat voor). Formaat:
 
 ```
 g: Git status
@@ -91,8 +91,8 @@ z: Zip selectie
 
 ## Bestanden
 
-* `~/.config/ncmac/ncmac.conf`: setup (Shift-F9)
-* `ncmac --keytest`: laat zien welke code je terminal voor een toets stuurt en hoe ncmac die leest
-* `~/.config/ncmac/history`: commandogeschiedenis
+* `~/.config/twinc/twinc.conf`: setup (Shift-F9)
+* `twinc --keytest`: laat zien welke code je terminal voor een toets stuurt en hoe twinc die leest
+* `~/.config/twinc/history`: commandogeschiedenis
 
-F8 gebruikt dezelfde Prullenmand als Finder, ook die op USB- en externe schijven. Lukt dat niet (bijvoorbeeld op een netwerkschijf), dan vraagt ncmac of het definitief mag. Uitzetten kan via F9 → Options → "Delete to Trash" (en Shift-F9 om dat te bewaren).
+F8 gebruikt dezelfde Prullenmand als Finder, ook die op USB- en externe schijven. Lukt dat niet (bijvoorbeeld op een netwerkschijf), dan vraagt twinc of het definitief mag. Uitzetten kan via F9 → Options → "Delete to Trash" (en Shift-F9 om dat te bewaren).
