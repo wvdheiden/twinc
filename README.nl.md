@@ -1,6 +1,6 @@
 # twinc
 
-(Voorheen **ncmac**.) Een two-panel filemanager voor de terminal op macOS, Linux en Windows, in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
+(Voorheen **ncmac**.) Een two-panel filemanager voor de terminal op macOS, Linux en Windows, in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. Website: [twinc.tech](https://twinc.tech). (English: [README.md](README.md))
 
 ![twinc in actie](docs/demo.gif)
 

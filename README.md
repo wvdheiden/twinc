@@ -1,6 +1,6 @@
 # twinc
 
-(Formerly **ncmac**.) A fast two-panel file manager for the terminal on macOS, Linux and Windows, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. (Nederlands: [README.nl.md](README.nl.md))
+(Formerly **ncmac**.) A fast two-panel file manager for the terminal on macOS, Linux and Windows, in the style of the classic DOS commanders: blue panels, function-key bar, command line, and keys your fingers still remember. It is a single native C++17 binary and uses only system libraries. Website: [twinc.tech](https://twinc.tech). (Nederlands: [README.nl.md](README.nl.md))
 
 ![twinc: marking files, copying, browsing a zip, the pull-down menu and the viewer](docs/demo.gif)
 
