@@ -38,7 +38,7 @@ int sysCopyFile(const std::string& src, const std::string& dst, bool (*progress)
 // File hidden in the GUI file manager (Finder flag on macOS; none on Linux)
 bool sysHidden(const struct stat& st);
 
-#define TWINC_VERSION "1.1.0"
+#define TWINC_VERSION "1.2.0"
 
 struct Config {
   bool showHidden = false;
