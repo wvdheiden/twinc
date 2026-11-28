@@ -1,10 +1,20 @@
 #include "term.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <io.h>
+#include <signal.h>
+#else
 #include <poll.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -15,12 +25,21 @@
 Screen scr;
 MouseEv g_mouse;
 
+#ifdef _WIN32
+// The Windows console runs in VT mode: output understands the same escape
+// sequences and keys arrive as xterm sequences (ENABLE_VIRTUAL_TERMINAL_INPUT).
+static HANDLE g_in = INVALID_HANDLE_VALUE, g_out = INVALID_HANDLE_VALUE;
+static DWORD g_origIn = 0, g_origOut = 0;
+static UINT g_origCP = 0, g_origOutCP = 0;
+#else
 static termios g_orig;
+#endif
 static bool g_haveOrig = false, g_isAlt = false, g_mouseOn = false;
 static volatile sig_atomic_t g_resized = 0;
-static std::string ib;  // pending input bytes
-
+#ifndef _WIN32
 static void onWinch(int) { g_resized = 1; }
+#endif
+static std::string ib;  // pending input bytes
 
 // ============================================================ UTF-8
 
@@ -73,9 +92,35 @@ int cpwidth(uint32_t cp) {
   if (cp < 127) return 1;
   if (cp < 0xA0) return -1;
   if (cp >= 0xDC80 && cp <= 0xDCFF) return -1;
+  // invisible format characters (BOM, zero-width space/joiners): terminals give them no cell
+  if (cp == 0xFEFF || (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x2060 && cp <= 0x2064)) return 0;
+#ifdef _WIN32
+  // no wcwidth(): combining marks are 0 wide, East Asian wide/fullwidth and emoji 2
+  static const uint32_t zero[][2] = {{0x300, 0x36F}, {0x483, 0x489}, {0x591, 0x5BD}, {0x610, 0x61A},
+                                     {0x64B, 0x65F}, {0x200B, 0x200F}, {0x20D0, 0x20FF}, {0xFE00, 0xFE0F},
+                                     {0xFE20, 0xFE2F}, {0x1F3FB, 0x1F3FF}, {0xE0100, 0xE01EF}};
+  static const uint32_t wide[][2] = {{0x1100, 0x115F}, {0x231A, 0x231B}, {0x23E9, 0x23EC}, {0x25FD, 0x25FE},
+                                     {0x2614, 0x2615}, {0x2648, 0x2653}, {0x26AA, 0x26AB}, {0x26BD, 0x26BE},
+                                     {0x26CE, 0x26CE}, {0x26D4, 0x26D4}, {0x26EA, 0x26EA}, {0x26F2, 0x26F5},
+                                     {0x26FA, 0x26FD}, {0x2705, 0x2705}, {0x270A, 0x270B}, {0x2728, 0x2728},
+                                     {0x274C, 0x274C}, {0x2753, 0x2755}, {0x2795, 0x2797}, {0x27B0, 0x27B0},
+                                     {0x2B1B, 0x2B1C}, {0x2B50, 0x2B55}, {0x2E80, 0x303E}, {0x3041, 0x33FF},
+                                     {0x3400, 0x4DBF}, {0x4E00, 0x9FFF}, {0xA000, 0xA4CF}, {0xAC00, 0xD7A3},
+                                     {0xF900, 0xFAFF}, {0xFE30, 0xFE4F}, {0xFF00, 0xFF60}, {0xFFE0, 0xFFE6},
+                                     {0x1F004, 0x1F004}, {0x1F0CF, 0x1F0CF}, {0x1F18E, 0x1F18E},
+                                     {0x1F191, 0x1F19A}, {0x1F200, 0x1F2FF}, {0x1F300, 0x1F64F},
+                                     {0x1F680, 0x1F6FF}, {0x1F900, 0x1F9FF}, {0x1FA70, 0x1FAFF},
+                                     {0x20000, 0x3FFFD}};
+  for (auto& r : zero)
+    if (cp >= r[0] && cp <= r[1]) return 0;
+  for (auto& r : wide)
+    if (cp >= r[0] && cp <= r[1]) return 2;
+  return 1;
+#else
   int w = wcwidth((wchar_t)cp);
   if (w < 0) return 1;
   return w;
+#endif
 }
 
 int u8width(const std::string& s) {
@@ -310,6 +355,17 @@ void Screen::flush() {
 namespace term {
 
 void write(const std::string& s) {
+#ifdef _WIN32
+  size_t off = 0;
+  while (off < s.size()) {
+    DWORD n = 0;
+    if (!WriteFile(g_out != INVALID_HANDLE_VALUE ? g_out : GetStdHandle(STD_OUTPUT_HANDLE), s.data() + off,
+                   (DWORD)std::min<size_t>(s.size() - off, 1 << 20), &n, nullptr) || n == 0)
+      return;
+    off += n;
+  }
+  return;
+#else
   size_t off = 0;
   while (off < s.size()) {
     ssize_t n = ::write(1, s.data() + off, s.size() - off);
@@ -319,10 +375,22 @@ void write(const std::string& s) {
     }
     off += (size_t)n;
   }
+#endif
 }
 
 void setRaw(bool on) {
   if (!g_haveOrig) return;
+#ifdef _WIN32
+  if (on) {
+    SetConsoleMode(g_in, ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS);
+    SetConsoleMode(g_out, g_origOut | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING |
+                              DISABLE_NEWLINE_AUTO_RETURN);
+  } else {
+    SetConsoleMode(g_in, g_origIn);
+    SetConsoleMode(g_out, g_origOut | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+  }
+  return;
+#else
   if (on) {
     termios r = g_orig;
     r.c_iflag &= ~(tcflag_t)(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -335,6 +403,7 @@ void setRaw(bool on) {
   } else {
     tcsetattr(0, TCSANOW, &g_orig);
   }
+#endif
 }
 
 void altScreen(bool on) {
@@ -354,6 +423,17 @@ void setMouse(bool on) {
 }
 
 void size(int& w, int& h) {
+#ifdef _WIN32
+  CONSOLE_SCREEN_BUFFER_INFO ci;
+  if (GetConsoleScreenBufferInfo(g_out, &ci)) {
+    w = ci.srWindow.Right - ci.srWindow.Left + 1;
+    h = ci.srWindow.Bottom - ci.srWindow.Top + 1;
+  } else {
+    w = 80;
+    h = 25;
+  }
+  return;
+#else
   winsize ws{};
   if (ioctl(1, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0) {
     w = ws.ws_col;
@@ -362,13 +442,37 @@ void size(int& w, int& h) {
     w = 80;
     h = 25;
   }
+#endif
 }
 
 void requestSize(int cols, int rows) {
   write("\x1b[8;" + std::to_string(rows) + ";" + std::to_string(cols) + "t");
 }
 
+#ifdef _WIN32
+static bool winInit() {
+  g_in = GetStdHandle(STD_INPUT_HANDLE);
+  g_out = GetStdHandle(STD_OUTPUT_HANDLE);
+  if (!GetConsoleMode(g_in, &g_origIn) || !GetConsoleMode(g_out, &g_origOut)) return false;
+  g_origCP = GetConsoleCP();
+  g_origOutCP = GetConsoleOutputCP();
+  SetConsoleCP(CP_UTF8);
+  SetConsoleOutputCP(CP_UTF8);
+  g_haveOrig = true;
+  return true;
+}
+#endif
+
 bool init() {
+#ifdef _WIN32
+  if (!winInit()) return false;
+  setRaw(true);
+  altScreen(true);
+  int w, h;
+  size(w, h);
+  scr.resize(w, h);
+  return true;
+#else
   if (!isatty(0) || !isatty(1)) return false;
   tcgetattr(0, &g_orig);
   g_haveOrig = true;
@@ -388,11 +492,19 @@ bool init() {
   size(w, h);
   scr.resize(w, h);
   return true;
+#endif
 }
 
 void shutdown() {
   if (g_isAlt) altScreen(false);
   setRaw(false);
+#ifdef _WIN32
+  if (g_haveOrig) {
+    SetConsoleMode(g_out, g_origOut);
+    SetConsoleCP(g_origCP);
+    SetConsoleOutputCP(g_origOutCP);
+  }
+#endif
 }
 
 void suspend() {
@@ -410,6 +522,41 @@ void resume() {
 
 static bool fillBuf(int timeout) {
   if (g_resized) return false;
+#ifdef _WIN32
+  // Wait for console input; keep only typed characters (VT input turns special keys
+  // into escape sequences) and note window size changes.
+  ULONGLONG until = timeout < 0 ? 0 : GetTickCount64() + (ULONGLONG)timeout;
+  for (;;) {
+    DWORD wait = INFINITE;
+    if (timeout >= 0) {
+      ULONGLONG now = GetTickCount64();
+      wait = now >= until ? 0 : (DWORD)(until - now);
+    }
+    if (WaitForSingleObject(g_in, wait) != WAIT_OBJECT_0) return false;
+    INPUT_RECORD rec[128];
+    DWORD n = 0;
+    if (!ReadConsoleInputW(g_in, rec, 128, &n)) return false;
+    std::wstring w;
+    for (DWORD i = 0; i < n; i++) {
+      if (rec[i].EventType == KEY_EVENT) {
+        const KEY_EVENT_RECORD& k = rec[i].Event.KeyEvent;
+        if (k.bKeyDown && k.uChar.UnicodeChar)
+          for (WORD r = 0; r < std::max<WORD>(k.wRepeatCount, 1); r++) w += k.uChar.UnicodeChar;
+      } else if (rec[i].EventType == WINDOW_BUFFER_SIZE_EVENT) {
+        g_resized = 1;
+      }
+    }
+    if (!w.empty()) {
+      int len = WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), nullptr, 0, nullptr, nullptr);
+      std::string b((size_t)len, '\0');
+      WideCharToMultiByte(CP_UTF8, 0, w.data(), (int)w.size(), &b[0], len, nullptr, nullptr);
+      ib += b;
+      return true;
+    }
+    if (g_resized) return false;
+    if (timeout == 0) return false;
+  }
+#else
   struct pollfd p;
   p.fd = 0;
   p.events = POLLIN;
@@ -422,6 +569,7 @@ static bool fillBuf(int timeout) {
   if (n < 0) return false;
   ib.append(b, (size_t)n);
   return true;
+#endif
 }
 
 static int take(size_t n, int key) {
@@ -661,9 +809,13 @@ std::string keyName(int k) {
 }
 
 int keyTest() {
+#ifdef _WIN32
+  if (!winInit()) return 1;
+#else
   if (!isatty(0)) return 1;
   tcgetattr(0, &g_orig);
   g_haveOrig = true;
+#endif
   setRaw(true);
   write("twinc key test: press keys to see what the terminal sends and how twinc reads them.\r\n"
         "Press q twice to quit.\r\n\r\n");

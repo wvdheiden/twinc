@@ -3,9 +3,9 @@
 #include <dirent.h>
 #include <limits.h>
 #include <pwd.h>
-#ifdef __APPLE__
+#if defined(__APPLE__)
 #include <sys/mount.h>
-#else
+#elif !defined(_WIN32)
 #include <sys/vfs.h>
 #include <fstream>
 #endif
@@ -45,7 +45,7 @@ bool Panel::load(const std::string& focusName) {
   DIR* d = opendir(path.c_str());
   if (!d) return false;
   e.clear();
-  if (path != "/") {
+  if (!isRootPath(path)) {
     Entry up;
     up.name = "..";
     up.dir = true;
@@ -196,8 +196,8 @@ bool Panel::chdirTo(const std::string& p, std::string* err) {
   }
   closedir(d);
   std::string old = path, focusName;
-  if (old.size() > n.size() && old.compare(0, n.size(), n) == 0 && (n == "/" || old[n.size()] == '/')) {
-    std::string rest = old.substr(n == "/" ? 1 : n.size() + 1);
+  if (old.size() > n.size() && old.compare(0, n.size(), n) == 0 && (isRootPath(n) || old[n.size()] == '/')) {
+    std::string rest = old.substr(dirSlash(n).size());
     focusName = rest.substr(0, rest.find('/'));
   }
   path = n;
@@ -421,7 +421,7 @@ void Panel::draw(int x, int y, int w, int h, bool active) {
   }
 }
 
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(_WIN32)
 // Mount point and file system type of path, from /proc/self/mounts (longest prefix).
 static void mountOf(const std::string& path, std::string& mnt, std::string& fs) {
   std::ifstream in("/proc/self/mounts");
@@ -463,10 +463,24 @@ void Panel::drawInfo(int x, int y, int w, int h, const Panel& o) {
   line("twinc version " TWINC_VERSION, hi);
   line("", fr);
   char host[256] = "";
+#ifdef _WIN32
+  if (const char* cn = getenv("COMPUTERNAME")) snprintf(host, sizeof host, "%s", cn);
+#else
   gethostname(host, sizeof host);
+#endif
   struct passwd* pw = getpwuid(getuid());
   line(std::string(pw ? pw->pw_name : "?") + "@" + host, fr);
   line("", fr);
+#ifdef _WIN32
+  {
+    std::string fs;
+    unsigned long long total = 0, avail = 0;
+    std::string label = sysVolumeInfo(o.realDir(), fs, total, avail);
+    line(fmtThousands(avail) + " bytes free", fr);
+    line("of " + fmtThousands(total) + " bytes", fr);
+    line("on " + o.realDir().substr(0, 2) + (label.empty() ? "" : " " + label) + (fs.empty() ? "" : " (" + fs + ")"), fr);
+  }
+#else
   struct statfs sf;
   if (statfs(o.realDir().c_str(), &sf) == 0) {
     unsigned long long avail = (unsigned long long)sf.f_bavail * sf.f_bsize;
@@ -481,6 +495,7 @@ void Panel::drawInfo(int x, int y, int w, int h, const Panel& o) {
     if (!mnt.empty()) line("on " + mnt + " (" + fs + ")", fr);
 #endif
   }
+#endif
   line("", fr);
   unsigned long long bytes = 0;
   int files = 0, dirs = 0;

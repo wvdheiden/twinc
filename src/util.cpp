@@ -10,6 +10,81 @@
 
 #include "common.h"
 
+#ifdef _WIN32
+// Windows paths are kept as "C:/dir/sub"; the root of a drive is "C:/".
+static bool hasDrive(const std::string& s) { return s.size() >= 2 && isalpha((unsigned char)s[0]) && s[1] == ':'; }
+bool isAbsPath(const std::string& s) { return (!s.empty() && (s[0] == '/' || s[0] == '\\')) || hasDrive(s); }
+bool isRootPath(const std::string& p) { return p == "/" || (p.size() == 3 && hasDrive(p) && p[2] == '/'); }
+
+static std::string cwdPath() {
+  char buf[PATH_MAX * 3];
+  std::string c = getcwd(buf, sizeof buf) ? buf : "C:/";
+  for (auto& ch : c)
+    if (ch == '\\') ch = '/';
+  return c;
+}
+
+std::string normPath(const std::string& p) {
+  std::string s = p.empty() ? cwdPath() : p;
+  for (auto& ch : s)
+    if (ch == '\\') ch = '/';
+  std::string drive;
+  if (hasDrive(s)) {
+    drive = s.substr(0, 2);
+    s = s.substr(2);
+    if (s.empty() || s[0] != '/') s = "/" + s;  // "C:foo" is taken as "C:/foo"
+  } else if (s[0] == '/') {
+    drive = cwdPath().substr(0, 2);
+  } else {
+    std::string c = cwdPath();
+    drive = c.substr(0, 2);
+    s = c.substr(2) + "/" + s;
+  }
+  drive[0] = (char)toupper((unsigned char)drive[0]);
+  std::vector<std::string> parts;
+  std::string cur;
+  for (size_t j = 0; j <= s.size(); j++) {
+    if (j == s.size() || s[j] == '/') {
+      if (cur == "..") {
+        if (!parts.empty()) parts.pop_back();
+      } else if (!cur.empty() && cur != ".") {
+        parts.push_back(cur);
+      }
+      cur.clear();
+    } else {
+      cur += s[j];
+    }
+  }
+  std::string r = drive;
+  for (auto& x : parts) r += "/" + x;
+  return parts.empty() ? drive + "/" : r;
+}
+
+std::string joinPath(const std::string& dir, const std::string& name) {
+  if (hasDrive(name)) return name;
+  if (dir.empty()) return name;
+  if (dir.back() == '/') return dir + name;
+  return dir + "/" + name;
+}
+
+std::string parentPath(const std::string& p) {
+  if (p.empty() || isRootPath(p)) return p.empty() ? "/" : p;
+  auto pos = p.rfind('/');
+  if (pos == std::string::npos) return p;
+  if (pos == 2 && hasDrive(p)) return p.substr(0, 3);
+  if (pos == 0) return "/";
+  return p.substr(0, pos);
+}
+
+std::string baseName(const std::string& p) {
+  if (isRootPath(p)) return p;
+  auto pos = p.rfind('/');
+  return pos == std::string::npos ? p : p.substr(pos + 1);
+}
+#else
+bool isAbsPath(const std::string& s) { return !s.empty() && s[0] == '/'; }
+bool isRootPath(const std::string& p) { return p == "/"; }
+
 std::string joinPath(const std::string& dir, const std::string& name) {
   if (!name.empty() && name[0] == '/') return name;
   if (dir.empty() || dir == "/") return "/" + name;
@@ -55,7 +130,12 @@ std::string baseName(const std::string& p) {
   return pos == std::string::npos ? p : p.substr(pos + 1);
 }
 
+#endif
+
 std::string homeDir() {
+#ifdef _WIN32
+  return getpwuid(0)->pw_dir;
+#endif
   const char* h = getenv("HOME");
   if (h && *h) return h;
   struct passwd* pw = getpwuid(getuid());
@@ -63,8 +143,13 @@ std::string homeDir() {
 }
 
 std::string configDir() {
+#ifdef _WIN32
+  const char* x = getenv("APPDATA");
+  std::string base = (x && *x) ? normPath(x) : homeDir() + "/AppData/Roaming";
+#else
   const char* x = getenv("XDG_CONFIG_HOME");
   std::string base = (x && *x) ? std::string(x) : homeDir() + "/.config";
+#endif
   std::string dir = base + "/twinc";
   // one-time migration from the old name
   struct stat st;
@@ -85,11 +170,17 @@ std::string expandTilde(const std::string& p) {
 std::string resolvePath(const std::string& base, const std::string& input) {
   std::string s = expandTilde(trim(input));
   if (s.empty()) return base;
-  if (s[0] != '/') s = joinPath(base, s);
+  if (!isAbsPath(s)) s = joinPath(base, s);
   return normPath(s);
 }
 
 std::string displayPath(const std::string& p) {
+#ifdef _WIN32
+  std::string r = p;
+  for (auto& c : r)
+    if (c == '/') c = '\\';
+  return r;
+#endif
   std::string h = homeDir();
   if (h != "/" && (p == h || (p.size() > h.size() && p.compare(0, h.size(), h) == 0 && p[h.size()] == '/')))
     return "~" + p.substr(h.size());
@@ -97,6 +188,11 @@ std::string displayPath(const std::string& p) {
 }
 
 std::string shellQuote(const std::string& s) {
+#ifdef _WIN32
+  // cmd.exe: double quotes around anything with spaces or special characters
+  bool plain = !s.empty() && s.find_first_of(" \t&()[]{}^=;!'+,`~%\"") == std::string::npos;
+  return plain ? s : "\"" + s + "\"";
+#endif
   if (s.empty()) return "''";
   bool safe = true;
   for (unsigned char c : s) {
@@ -198,7 +294,7 @@ bool existsL(const std::string& p) {
 int mkdirP(const std::string& p) {
   std::string cur;
   std::string n = normPath(p);
-  size_t i = 1;
+  size_t i = isRootPath(n.substr(0, 3)) && n.size() > 3 ? 3 : 1;
   while (true) {
     size_t j = n.find('/', i);
     cur = n.substr(0, j);
@@ -234,7 +330,9 @@ bool matchMasks(const std::vector<std::string>& masks, const std::string& name) 
 }
 
 bool sysHidden(const struct stat& st) {
-#ifdef __APPLE__
+#if defined(_WIN32)
+  return (st.st_attr & 0x6) != 0;  // FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM
+#elif defined(__APPLE__)
   return (st.st_flags & UF_HIDDEN) != 0;
 #else
   (void)st;

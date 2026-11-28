@@ -1,6 +1,6 @@
 # twinc
 
-(Voorheen **ncmac**.) Een two-panel filemanager voor de terminal op macOS en Linux, in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
+(Voorheen **ncmac**.) Een two-panel filemanager voor de terminal op macOS, Linux en Windows, in de stijl van de klassieke DOS-commanders. Eén native binary in C++17, geen dependencies. (English: [README.md](README.md))
 
 ![twinc in actie](docs/demo.gif)
 
@@ -15,8 +15,9 @@ brew install twinc
 Of download van de [GitHub-releases](https://github.com/wvdheiden/twinc/releases):
 * **macOS:** de ondertekende `twinc-<versie>.pkg`;
 * **Linux:** een `.deb` voor Debian en Ubuntu (`sudo apt install ./twinc_<versie>_amd64.deb`) of een `.tar.gz` voor andere distributies, voor x86_64 en arm64. Nodig: libarchive.
+* **Windows:** `twinc-<versie>-windows-x86_64.zip`. Pak hem uit en zet `twinc.exe` in een map die in je `PATH` staat. Het is één bestand, er hoeft niets anders bij. Werkt op Windows 10 (versie 1903 of nieuwer) en Windows 11, het best in Windows Terminal.
 
-Of bouw zelf (C++17-compiler en libarchive; op Linux ook `libarchive-dev`):
+Of bouw zelf (C++17-compiler en libarchive; op Linux ook `libarchive-dev`; op Windows in een MSYS2 UCRT64-shell met `mingw-w64-ucrt-x86_64-gcc` en `mingw-w64-ucrt-x86_64-libarchive`):
 
 ```sh
 make && make install PREFIX=~/.local
@@ -30,11 +31,18 @@ source /usr/local/share/twinc/ncm.sh            # macOS .pkg
 source /usr/share/twinc/ncm.sh                  # Linux .deb
 ```
 
+In PowerShell zet je `ncm.ps1` uit de Windows-zip in je profiel (`notepad $PROFILE`):
+
+```powershell
+. "C:\Tools\twinc\ncm.ps1"
+```
+
 `nc` zelf is al netcat; wil je toch `nc` typen, zet dan `alias nc=ncm` in je shell-configuratie.
 
 ## Terminal-instellingen (belangrijk)
 
 * **Linux:** de meeste terminals (GNOME Terminal, Konsole, xterm, kitty) werken zo. Sommige desktops pakken F1, F10 of Alt-F1…F10 zelf af; zet die sneltoetsen uit in de terminal- of desktopinstellingen, of gebruik Ctrl-F (hieronder).
+* **Windows Terminal:** functietoetsen, Alt en de muis werken zo. Alt-Enter (volledig pad op de commandoregel) en F11 gebruikt Windows Terminal zelf voor volledig scherm; Alt-Enter krijg je terug door die sneltoets te verwijderen onder Instellingen → Acties.
 * **Terminal.app** → Instellingen → Profielen → Toetsenbord: vink **"Gebruik Option als Meta-toets"** aan (voor Alt-toetsen zoals Alt-F7 en Alt+letter quick search).
 * **iTerm2** → Profiles → Keys: Left Option = **Esc+**.
 * Systeeminstellingen → Toetsenbord: **"Gebruik F1, F2 enz. als standaard functietoetsen"**, anders moet je `fn` erbij houden. Mission Control pakt sommige Ctrl-F-toetsen af; alles zit ook in het F9-menu.
@@ -68,7 +76,7 @@ source /usr/share/twinc/ncm.sh                  # Linux .deb
 | Shift-F9 | setup opslaan |
 | Alt-. | verborgen bestanden tonen/verbergen (dotfiles en in Finder verborgen; in een gedimde kleur), ook via F9 → Options |
 
-Enter op een bestand: een map gaat open; een archief gaat open als map; een script wordt uitgevoerd; al het andere opent met de standaard-app (`open` op macOS, `xdg-open` op Linux). Zonder desktop, bijvoorbeeld via SSH, opent het in de ingebouwde viewer.
+Enter op een bestand: een map gaat open; een archief gaat open als map; een script of programma wordt uitgevoerd (op Windows `.exe`, `.bat`, `.cmd` en `.ps1`); al het andere opent met de standaard-app (`open` op macOS, `xdg-open` op Linux, het gekoppelde programma op Windows). Zonder desktop, bijvoorbeeld via SSH, opent het in de ingebouwde viewer.
 
 ### Archieven
 
@@ -84,7 +92,7 @@ Muis: klik selecteert, dubbelklik opent, rechtsklik markeert, het wiel scrollt e
 
 ## User menu (F2)
 
-`~/.config/twinc/menu` (een `.ncmenu` in een map gaat voor). Formaat:
+`~/.config/twinc/menu`, op Windows `%APPDATA%\twinc\menu` (een `.ncmenu` in een map gaat voor). Commando's draaien in je shell: `$SHELL` op macOS en Linux, `cmd.exe` op Windows. Formaat:
 
 ```
 g: Git status
@@ -101,4 +109,4 @@ z: Zip selectie
 * `twinc --keytest`: laat zien welke code je terminal voor een toets stuurt en hoe twinc die leest
 * `~/.config/twinc/history`: commandogeschiedenis
 
-F8 gebruikt dezelfde Prullenmand als Finder, ook die op USB- en externe schijven. Op Linux is dat de prullenbak van je desktop (`~/.local/share/Trash`), dus terugzetten kan vanuit je bestandsbeheerder. Lukt dat niet (bijvoorbeeld op een netwerkschijf), dan vraagt twinc of het definitief mag. Uitzetten kan via F9 → Options → "Delete to Trash" (en Shift-F9 om dat te bewaren).
+F8 gebruikt dezelfde Prullenmand als Finder, ook die op USB- en externe schijven. Op Linux is dat de prullenbak van je desktop (`~/.local/share/Trash`) en op Windows de Prullenbak, dus terugzetten kan vanuit je bestandsbeheerder of Verkenner. Lukt dat niet (bijvoorbeeld op een netwerkschijf), dan vraagt twinc of het definitief mag. Uitzetten kan via F9 → Options → "Delete to Trash" (en Shift-F9 om dat te bewaren).

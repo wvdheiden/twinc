@@ -11,7 +11,11 @@
 #include "term.h"
 
 // ---- platform differences
-#ifdef __APPLE__
+#if defined(_WIN32)
+#define ST_ATIM(st) (st).st_atim
+#define ST_MTIM(st) (st).st_mtim
+#define TWINC_OS "Windows"
+#elif defined(__APPLE__)
 #define ST_ATIM(st) (st).st_atimespec
 #define ST_MTIM(st) (st).st_mtimespec
 #define TWINC_OS "macOS"
@@ -19,6 +23,17 @@
 #define ST_ATIM(st) (st).st_atim
 #define ST_MTIM(st) (st).st_mtim
 #define TWINC_OS "Linux"
+#endif
+#ifdef _WIN32
+#include <vector>
+int sysRun(const std::string& command, const std::string& cwd, const std::string& other);
+int sysOpen(const std::string& path);  // 0 ok, 1 no association, -1 no desktop
+std::vector<std::string> sysDrives();  // "C:/", "D:/", ...
+std::string sysVolumeInfo(const std::string& path, std::string& fsName, unsigned long long& total,
+                          unsigned long long& avail);  // returns the volume label
+int sysClearAttrs(const char* path);
+int sysCopyFile(const std::string& src, const std::string& dst, bool (*progress)(unsigned long long, void*),
+                void* ctx);
 #endif
 // File hidden in the GUI file manager (Finder flag on macOS; none on Linux)
 bool sysHidden(const struct stat& st);
@@ -38,6 +53,10 @@ extern Config cfg;
 // ---- paths / formatting (util.cpp) ----
 std::string joinPath(const std::string& dir, const std::string& name);
 std::string normPath(const std::string& p);
+bool isAbsPath(const std::string& p);
+bool isRootPath(const std::string& p);  // "/" (or "C:/" on Windows)
+// p with exactly one trailing '/', for prefix tests ("/" and "C:/" already end in one)
+inline std::string dirSlash(const std::string& p) { return !p.empty() && p.back() == '/' ? p : p + "/"; }
 std::string parentPath(const std::string& p);
 std::string baseName(const std::string& p);
 std::string homeDir();

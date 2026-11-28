@@ -1,7 +1,7 @@
 // Copy / move / delete with progress, overwrite confirmation and abort (Esc).
-#ifdef __APPLE__
+#if defined(__APPLE__)
 #include <copyfile.h>
-#else
+#elif !defined(_WIN32)
 #include <linux/fs.h>
 #include <sys/ioctl.h>
 #endif
@@ -126,7 +126,18 @@ void setTimes(const std::string& p, const struct stat& st) {
 
 int copyRec(const std::string& src, const std::string& dst, Op& op);
 
-#ifndef __APPLE__
+#ifdef _WIN32
+// Windows: CopyFileEx (copies attributes and times too) with progress and Esc abort.
+bool winCopyProgress(unsigned long long done, void* ctx) {
+  Op* op = (Op*)ctx;
+  op->curDone = done;
+  op->show();
+  return op->poll();
+}
+int copyData(const std::string& src, const std::string& dst, const struct stat&, Op& op) {
+  return sysCopyFile(src, dst, winCopyProgress, &op);
+}
+#elif !defined(__APPLE__)
 // Linux: reflink clone (btrfs/xfs) if possible, else copy_file_range / read+write
 // in chunks with progress and Esc abort.
 int copyData(const std::string& src, const std::string& dst, const struct stat& st, Op& op) {
@@ -226,8 +237,10 @@ int copyRec(const std::string& src, const std::string& dst, Op& op) {
       if (r < 0) return -1;
       if (r > 0) res = 1;
     }
-#ifdef __APPLE__
+#if defined(__APPLE__)
     copyfile(src.c_str(), dst.c_str(), nullptr, COPYFILE_METADATA);
+#elif defined(_WIN32)
+    (void)0;
 #else
     chmod(dst.c_str(), st.st_mode & 07777);
 #endif
@@ -257,8 +270,10 @@ int copyRec(const std::string& src, const std::string& dst, Op& op) {
 
 // Clear immutable flags (macOS uchg) so a delete can be retried.
 int clearFlags(const char* p, int) {
-#ifdef __APPLE__
+#if defined(__APPLE__)
   return lchflags(p, 0);
+#elif defined(_WIN32)
+  return sysClearAttrs(p);
 #else
   (void)p;
   return -1;
@@ -283,7 +298,7 @@ int removeRec(const std::string& p, Op& op, bool count) {
       if (r > 0) res = 1;
     }
     if (res == 0 && rmdir(p.c_str()) != 0) {
-      if (!(errno == EPERM && clearFlags(p.c_str(), 0) == 0 && rmdir(p.c_str()) == 0))
+      if (!((errno == EPERM || errno == EACCES) && clearFlags(p.c_str(), 0) == 0 && rmdir(p.c_str()) == 0))
         return errAsk(op, "Cannot delete directory " + displayPath(p), errno);
     }
     return res;
@@ -293,7 +308,7 @@ int removeRec(const std::string& p, Op& op, bool count) {
   op.show();
   if (op.poll()) return -1;
   if (unlink(p.c_str()) != 0) {
-    if (!(errno == EPERM && clearFlags(p.c_str(), 0) == 0 && unlink(p.c_str()) == 0))
+    if (!((errno == EPERM || errno == EACCES) && clearFlags(p.c_str(), 0) == 0 && unlink(p.c_str()) == 0))
       return errAsk(op, "Cannot delete " + displayPath(p), errno);
   }
   if (count) {
@@ -345,7 +360,7 @@ bool fo_copyMove(const std::string& srcDir, const std::vector<std::string>& name
       if (errAsk(op, "Cannot read " + displayPath(src), errno) < 0) break;
       continue;
     }
-    if (S_ISDIR(ss.st_mode) && (dst == src || dst.compare(0, src.size() + 1, src + "/") == 0)) {
+    if (S_ISDIR(ss.st_mode) && (dst == src || dst.rfind(dirSlash(src), 0) == 0)) {
       ui::error("Cannot " + std::string(move ? "move" : "copy") + " a directory into itself");
       continue;
     }
@@ -499,7 +514,7 @@ bool fo_arcExtract(const std::string& arc, const std::string& inDir, const std::
     std::string target = destIsDir ? joinPath(destN, rel)
                                    : (rel == top ? destN : joinPath(destN, rel.substr(top.size() + 1)));
     target = normPath(target);
-    if (destN != "/" && target != destN && target.compare(0, destN.size() + 1, destN + "/") != 0) continue;
+    if (!isRootPath(destN) && target != destN && target.rfind(dirSlash(destN), 0) != 0) continue;
     op.cur = arc + "/" + e.path;
     op.dst = target;
     if (e.dir) {

@@ -2,7 +2,7 @@
 // files on the home file system go to $XDG_DATA_HOME/Trash, files elsewhere to
 // $topdir/.Trash-$uid. Each item gets a .trashinfo with its original path, so the
 // desktop's file manager can restore it.
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>

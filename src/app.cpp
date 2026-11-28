@@ -6,7 +6,12 @@
 #include <pwd.h>
 #include <signal.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#else
 #include <sys/wait.h>
+#endif
 #include <unistd.h>
 
 #include <algorithm>
@@ -131,7 +136,7 @@ struct App {
       if (!p.load()) {
         // directory vanished: walk up until something is readable
         std::string d = p.path;
-        while (d != "/" && !isDir(d)) d = parentPath(d);
+        while (!isRootPath(d) && !isDir(d)) d = parentPath(d);
         p.chdirTo(d);
       }
     }
@@ -164,6 +169,9 @@ struct App {
   // ------------------------------------------------------------ running programs
 
   int spawn(const std::string& command) {
+#ifdef _WIN32
+    return sysRun(command, cp().realDir(), op().path);
+#else
     const char* sh = getenv("SHELL");
     std::string shell = (sh && *sh) ? sh : "/bin/zsh";
     pid_t pid = fork();
@@ -187,6 +195,7 @@ struct App {
       break;
     }
     return st;
+#endif
   }
 
   void runShell(const std::string& command, bool echo, bool pause) {
@@ -207,6 +216,11 @@ struct App {
   // Open with the default application (open(1) on macOS, xdg-open on Linux).
   // Returns false if no application could be started.
   bool openWith(const std::string& path) {
+#ifdef _WIN32
+    int r = sysOpen(path);
+    if (r == 1) ui::message("Open", {"No application is associated with", baseName(path)}, {"OK"});
+    return r >= 0;
+#else
 #ifndef __APPLE__
     const char* dpy = getenv("DISPLAY");
     const char* way = getenv("WAYLAND_DISPLAY");
@@ -227,6 +241,7 @@ struct App {
     if (WIFEXITED(st) && WEXITSTATUS(st) != 0)
       ui::message("Open", {"No application is associated with", baseName(path)}, {"OK"});
     return true;
+#endif
   }
 
   // Enter on a file: default app, or the built-in viewer when there is no GUI.
@@ -241,10 +256,17 @@ struct App {
     else if (t.rfind("cd ", 0) == 0 || t.rfind("cd\t", 0) == 0) arg = trim(t.substr(3));
     else if (t.size() > 2 && t.compare(0, 2, "cd") == 0 && (t[2] == '.' || t[2] == '/' || t[2] == '~' || t[2] == '\\'))
       arg = t.substr(2);  // DOS style: cd..  cd\  cd/
+#ifdef _WIN32
+    else if (t.size() == 2 && isalpha((unsigned char)t[0]) && t[1] == ':') arg = t + "/";  // "D:" switches drive
+#endif
     else return false;
     if (arg.size() >= 2 && ((arg.front() == '"' && arg.back() == '"') || (arg.front() == '\'' && arg.back() == '\'')))
       arg = arg.substr(1, arg.size() - 2);
+#ifdef _WIN32
+    else if (false) {  // backslash is the path separator here, not an escape
+#else
     else {
+#endif
       std::string u;
       for (size_t i = 0; i < arg.size(); i++) {
         if (arg[i] == '\\' && i + 1 < arg.size()) u += arg[++i];
@@ -371,10 +393,22 @@ struct App {
     std::string ext = dot == std::string::npos ? "" : toLower(n.substr(dot + 1));
     bool script = dot == std::string::npos || dot == 0 || ext == "sh" || ext == "command" ||
                   ext == "py" || ext == "pl" || ext == "rb" || ext == "zsh" || ext == "bash" || ext == "tool";
+#ifdef _WIN32
+    (void)script;
+    if (ext == "exe" || ext == "com" || ext == "bat" || ext == "cmd") {
+      execCommand(shellQuote(n));
+      return;
+    }
+    if (ext == "ps1") {
+      execCommand("powershell -NoProfile -ExecutionPolicy Bypass -File " + shellQuote(n));
+      return;
+    }
+#else
     if (e->exec && script) {
       execCommand("./" + shellQuote(n));
       return;
     }
+#endif
     openFile(full);
   }
 
@@ -385,8 +419,13 @@ struct App {
 
   std::string tempDir() {
     if (tmpRoot.empty()) {
+#ifdef _WIN32
+      const char* t = getenv("TEMP");
+      tmpRoot = normPath((t && *t) ? t : "C:/Windows/Temp") + "/twinc-" + std::to_string(getpid());
+#else
       const char* t = getenv("TMPDIR");
       tmpRoot = normPath((t && *t) ? t : "/tmp") + "/twinc-" + std::to_string(getpid());
+#endif
     }
     std::string d = tmpRoot + "/" + std::to_string(++tmpCounter);
     mkdirP(d);
@@ -503,7 +542,11 @@ struct App {
     if (cfg.extEditor) {
       const char* ed = getenv("VISUAL");
       if (!ed || !*ed) ed = getenv("EDITOR");
+      #ifdef _WIN32
+      std::string e = (ed && *ed) ? ed : "notepad";
+#else
       std::string e = (ed && *ed) ? ed : "vi";
+#endif
       runShell(e + " " + shellQuote(full), false, false);
     } else {
       runEditor(full);
@@ -578,13 +621,16 @@ struct App {
     }
     cp().load();
     if (full.compare(0, cp().path.size(), cp().path) == 0) {
-      std::string rest = full.substr(cp().path == "/" ? 1 : cp().path.size() + 1);
+      std::string rest = full.substr(dirSlash(cp().path).size());
       cp().focus(rest.substr(0, rest.find('/')));
     }
     if (op().path == cp().path) op().load();
   }
 
   bool inTrash(const std::string& path) const {
+#ifdef _WIN32
+    return toLower(path).find("/$recycle.bin") != std::string::npos;
+#endif
 #ifdef __APPLE__
     std::string t = homeDir() + "/.Trash";
 #else
@@ -621,12 +667,20 @@ struct App {
   // ------------------------------------------------------------ dialogs
 
   void driveMenu(int i) {
+#ifdef _WIN32
+    std::vector<std::string> paths = sysDrives();
+    paths.push_back(homeDir());
+#else
     std::vector<std::string> paths = {"/", homeDir()};
+#endif
     for (const char* sub : {"Desktop", "Documents", "Downloads"}) {
       std::string d = homeDir() + "/" + sub;
       if (isDir(d)) paths.push_back(d);
     }
-#ifdef __APPLE__
+#if defined(_WIN32)
+    std::vector<std::string> volRoots;
+    std::string user;
+#elif defined(__APPLE__)
     paths.push_back("/Applications");
     std::vector<std::string> volRoots = {"/Volumes"};
     std::string user;
@@ -642,7 +696,7 @@ struct App {
         std::string v = root + "/" + de->d_name;
         if (!isDir(v) || std::find(paths.begin(), paths.end(), v) != paths.end()) continue;
         if (v == "/media/" + user || v == "/run/media/" + user) continue;
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(_WIN32)
         {  // only real mount points, no symlinked duplicates (/media/cdrom -> cdrom0)
           struct stat vs, rs;
           if (lstat(v.c_str(), &vs) != 0 || !S_ISDIR(vs.st_mode)) continue;
@@ -657,10 +711,28 @@ struct App {
     }
     std::vector<std::string> labels;
     int sel = 0;
+#ifdef _WIN32
+    int folderNo = 0;
+#endif
     for (size_t j = 0; j < paths.size(); j++) {
+#ifdef _WIN32
+      if (isRootPath(paths[j])) {  // drives: "C:  Windows (NTFS)"
+        std::string fs;
+        unsigned long long tot = 0, av = 0;
+        std::string label = sysVolumeInfo(paths[j], fs, tot, av);
+        std::string info = label.empty() ? fs : label + (fs.empty() ? "" : " (" + fs + ")");
+        if (info.empty()) info = "(not ready)";
+        labels.push_back(paths[j].substr(0, 2) + "  " + info);
+        if (P[i].path.rfind(paths[j], 0) == 0) sel = (int)j;
+        continue;
+      }
+      // folders get digits so their hotkeys don't clash with drive letters
+      char letter = (char)('1' + (folderNo++ % 9));
+#else
       char letter = (char)(j < 26 ? 'A' + j : '0' + (j - 26) % 10);
+#endif
       labels.push_back(std::string(1, letter) + "  " + displayPath(paths[j]));
-      if (P[i].path == paths[j] || (P[i].path.rfind(paths[j] + "/", 0) == 0 && paths[j] != "/")) sel = (int)j;
+      if (P[i].path == paths[j] || (P[i].path.rfind(dirSlash(paths[j]), 0) == 0 && !isRootPath(paths[j]))) sel = (int)j;
     }
     int r = ui::list(i == 0 ? "Left - Drive" : "Right - Drive", labels, sel, true);
     if (r < 0) return;
@@ -721,7 +793,7 @@ struct App {
     }
     std::vector<std::string> items;
     for (auto& r : results) {
-      std::string rel = r.substr(root == "/" ? 1 : root.size() + 1);
+      std::string rel = r.substr(dirSlash(root).size());
       items.push_back(rel);
     }
     int r = ui::list("Find file - " + std::to_string(results.size()) + " found (Enter = go to file)", items, 0);
@@ -736,7 +808,7 @@ struct App {
   void treeDialog() {
     std::map<std::string, std::vector<std::string>> cache;
     const std::string here = cp().path;
-    auto onPath = [&](const std::string& x) { return here == x || here.rfind(x + "/", 0) == 0; };
+    auto onPath = [&](const std::string& x) { return here == x || here.rfind(dirSlash(x), 0) == 0; };
     auto kids = [&](const std::string& p) -> const std::vector<std::string>& {
       auto it = cache.find(p);
       if (it != cache.end()) return it->second;
@@ -768,9 +840,11 @@ struct App {
     };
     std::vector<Line> lines;
     std::set<std::string> expanded;
+    std::string treeRoot = cp().path;
+    while (!isRootPath(treeRoot)) treeRoot = parentPath(treeRoot);
     for (std::string a = cp().path;; a = parentPath(a)) {
       expanded.insert(a);
-      if (a == "/") break;
+      if (isRootPath(a)) break;
     }
     std::function<void(const std::string&, const std::string&)> walk = [&](const std::string& p,
                                                                           const std::string& prefix) {
@@ -785,8 +859,8 @@ struct App {
     int sel = 0, top = 0;
     auto rebuild = [&](const std::string& focusPath) {
       lines.clear();
-      lines.push_back({"/", "/", ""});
-      walk("/", "");
+      lines.push_back({treeRoot, displayPath(treeRoot), ""});
+      walk(treeRoot, "");
       sel = 0;
       for (size_t i = 0; i < lines.size(); i++)
         if (lines[i].path == focusPath) { sel = (int)i; break; }
@@ -842,7 +916,7 @@ struct App {
         case K_END: sel = n - 1; search.clear(); break;
         case K_RIGHT: case '+':
           search.clear();
-          if (!expanded.count(cur.path) || cur.path == "/") {
+          if (!expanded.count(cur.path) || isRootPath(cur.path)) {
             expanded.insert(cur.path);
             rebuild(cur.path);
           } else if (sel + 1 < n && parentPath(lines[sel + 1].path) == cur.path) {
@@ -851,19 +925,19 @@ struct App {
           break;
         case K_LEFT: case '-':
           search.clear();
-          if (expanded.count(cur.path) && cur.path != "/") {
+          if (expanded.count(cur.path) && !isRootPath(cur.path)) {
             for (auto it = expanded.begin(); it != expanded.end();) {  // collapse whole subtree
-              if (*it == cur.path || it->rfind(cur.path + "/", 0) == 0) it = expanded.erase(it);
+              if (*it == cur.path || it->rfind(dirSlash(cur.path), 0) == 0) it = expanded.erase(it);
               else ++it;
             }
             rebuild(cur.path);
-          } else if (cur.path != "/") {
+          } else if (!isRootPath(cur.path)) {
             rebuild(parentPath(cur.path));
           }
           break;
         case '*':  // expand everything below (one level deeper each time)
           for (auto& L : std::vector<Line>(lines))
-            if (L.path == cur.path || L.path.rfind(cur.path == "/" ? "/" : cur.path + "/", 0) == 0)
+            if (L.path == cur.path || L.path.rfind(dirSlash(cur.path), 0) == 0)
               expanded.insert(L.path);
           rebuild(cur.path);
           break;
@@ -961,17 +1035,31 @@ struct App {
          "#   %f  current file      %s  selected files (or current)\n"
          "#   %d  current directory %o  other panel's directory    !.!  same as %f\n"
          "# A file named .ncmenu in a directory overrides this menu there.\n\n"
+#ifndef _WIN32
          "d: Disk usage of this directory\n"
          "    du -sh * | sort -h\n"
+#endif
          "g: Git status\n"
          "    git status\n"
          "l: Git log (last 20)\n"
          "    git log --oneline -20\n"
+#ifdef _WIN32
+         "z: Zip selected files into archive.zip\n"
+         "    tar -a -c -f archive.zip %s\n"
+         "u: Unpack current archive\n"
+         "    tar -xvf %f\n"
+         "e: Open current directory in Explorer\n"
+         "    explorer .\n"
+         "c: Copy full path of current file to clipboard\n"
+         "    echo %d\\%f| clip\n";
+#else
          "z: Zip selected files into archive.zip\n"
          "    zip -r archive.zip %s\n"
          "u: Unpack current archive\n"
          "    tar -xvf %f\n"
-#ifdef __APPLE__
+#endif
+#if defined(_WIN32)
+#elif defined(__APPLE__)
          "q: Quick Look current file\n"
          "    qlmanage -p %f >/dev/null 2>&1\n"
          "r: Reveal current file in Finder\n"
@@ -1229,6 +1317,8 @@ struct App {
         {"Panels on/off", "Ctrl-O", A_PANELS, nullptr},
         #ifdef __APPLE__
         {"Open in Finder", "", A_FINDER, nullptr},
+#elif defined(_WIN32)
+        {"Open in Explorer", "", A_FINDER, nullptr},
 #else
         {"Open in file manager", "", A_FINDER, nullptr},
 #endif
@@ -1573,7 +1663,7 @@ struct App {
         if (p.isList()) enter(true);
         return;
       case 0x1c:  // Ctrl-\ : root
-        if (p.isList()) goDir(act, "/");
+        if (p.isList()) { std::string r = p.path; while (!isRootPath(r)) r = parentPath(r); goDir(act, r); }
         return;
       case K_ENTER:
         if (!cmdEmpty) execCommand(cmd.get());
@@ -1673,8 +1763,15 @@ void usage() {
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+  _set_fmode(_O_BINARY);  // open() and friends: no CR/LF translation
+  _setmode(0, _O_BINARY);
+  _setmode(1, _O_BINARY);
+  setlocale(LC_ALL, ".UTF-8");
+#else
   setlocale(LC_ALL, "");
   if (MB_CUR_MAX == 1) setlocale(LC_CTYPE, "en_US.UTF-8");
+#endif
 
   std::vector<std::string> dirs;
   std::string lastDirFile;
@@ -1700,7 +1797,7 @@ int main(int argc, char** argv) {
 
   static App app;
   char cwd[PATH_MAX];
-  std::string start = getcwd(cwd, sizeof cwd) ? cwd : homeDir();
+  std::string start = normPath(getcwd(cwd, sizeof cwd) ? cwd : homeDir());
   app.loadSetup();
   app.P[0].path = dirs.size() > 0 ? resolvePath(start, dirs[0]) : start;
   app.P[1].path = dirs.size() > 1 ? resolvePath(start, dirs[1]) : app.P[0].path;
