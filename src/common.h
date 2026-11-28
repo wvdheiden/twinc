@@ -23,7 +23,7 @@
 // File hidden in the GUI file manager (Finder flag on macOS; none on Linux)
 bool sysHidden(const struct stat& st);
 
-#define TWINC_VERSION "1.0.1"
+#define TWINC_VERSION "1.1.0"
 
 struct Config {
   bool showHidden = false;
